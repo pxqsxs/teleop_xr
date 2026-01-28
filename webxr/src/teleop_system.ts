@@ -49,18 +49,27 @@ export class TeleopSystem extends createSystem({
 
       const cameraButton = document.getElementById("camera-button");
       if (cameraButton) {
-      cameraButton.addEventListener("click", () => {
-        this.queries.cameraPanel.results.forEach((entity) => {
-          if (entity.object3D) {
-            // Traverse up to find the root-most object (Handle) that is attached to the Scene
-            let target = entity.object3D;
-            while (target.parent && target.parent.type !== 'Scene') {
-              target = target.parent;
+        cameraButton.addEventListener("click", () => {
+          this.queries.cameraPanel.results.forEach((entity) => {
+            if (entity.object3D) {
+              // Traverse up to find the root-most object (Handle) that is attached to the Scene
+              let target = entity.object3D;
+              // Add safety counter to prevent infinite loops (max 100 levels deep)
+              let depth = 0;
+              while (target.parent && target.parent.type !== 'Scene' && depth < 100) {
+                target = target.parent;
+                depth++;
+              }
+              
+              if (depth >= 100) {
+                 console.warn("TeleopSystem: Max depth reached while traversing up for camera panel");
+              }
+
+              target.visible = !target.visible;
+              console.log("Toggled camera panel visibility to:", target.visible);
             }
-            target.visible = !target.visible;
-          }
+          });
         });
-      });
       }
 
       const isConnected = this.ws && this.ws.readyState === WebSocket.OPEN;
