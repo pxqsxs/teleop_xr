@@ -49,13 +49,17 @@ export class TeleopSystem extends createSystem({
 
       const cameraButton = document.getElementById("camera-button");
       if (cameraButton) {
-        cameraButton.addEventListener("click", () => {
-          this.queries.cameraPanel.results.forEach((entity) => {
-            if (entity.object3D) {
-              entity.object3D.visible = !entity.object3D.visible;
-            }
-          });
+      cameraButton.addEventListener("click", () => {
+        this.queries.cameraPanel.results.forEach((entity) => {
+          if (entity.object3D) {
+            // If the panel is a child of a handle (DraggablePanel structure), toggle the handle
+            const target = (entity.object3D.parent && entity.object3D.parent.type !== 'Scene') 
+              ? entity.object3D.parent 
+              : entity.object3D;
+            target.visible = !target.visible;
+          }
         });
+      });
       }
 
       const isConnected = this.ws && this.ws.readyState === WebSocket.OPEN;

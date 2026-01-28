@@ -1,19 +1,56 @@
 import { World, PanelUI, Interactable, DistanceGrabbable, MovementMode } from "@iwsdk/core";
-import { Mesh, PlaneGeometry, MeshBasicMaterial, VideoTexture, DoubleSide } from "three";
+import { Mesh, PlaneGeometry, MeshBasicMaterial, VideoTexture, DoubleSide, BoxGeometry } from "three";
 
 export class DraggablePanel {
   public entity: any;
+  public panelEntity: any;
 
   constructor(protected world: World, configPath: string, options: any = {}) {
+    const width = options.maxWidth || 0.8;
+    const height = options.maxHeight || 0.6;
+    const handleHeight = 0.05;
+    const gap = 0.02;
+
+    // 1. Create Handle (Root) - Interactable and Grabbable
     this.entity = world.createTransformEntity()
+      .addComponent(Interactable)
+      .addComponent(DistanceGrabbable, {
+        movementMode: MovementMode.MoveFromTarget
+      });
+
+    // Handle Visuals - Styling aligned with uikit panel
+    const handleWidth = width * 0.5;
+    const handleGeo = new BoxGeometry(handleWidth, handleHeight, 0.05);
+    const handleMat = new MeshBasicMaterial({ 
+      color: 0xe4e4e7, // Light grey
+      transparent: true, 
+      opacity: 0.5 
+    });
+    const handleMesh = new Mesh(handleGeo, handleMat);
+    this.entity.object3D.add(handleMesh);
+
+    // 2. Create Panel (Child) - Interactable but NOT Grabbable
+    this.panelEntity = world.createTransformEntity()
       .addComponent(PanelUI, {
         config: configPath,
         ...options
       })
       .addComponent(Interactable)
+      // Stop grab event bubbling by consuming it with a locked DistanceGrabbable
       .addComponent(DistanceGrabbable, {
-        movementMode: MovementMode.MoveFromTarget
+        movementMode: MovementMode.MoveFromTarget,
+        translate: false,
+        rotate: false,
+        scale: false
       });
+
+    // Parent Panel to Handle
+    this.entity.object3D.add(this.panelEntity.object3D);
+
+    // Offset Panel above Handle
+    // Panel Y - height/2 = handleHeight/2 + gap
+    const panelY = (height / 2) + (handleHeight / 2) + gap;
+    this.panelEntity.object3D.position.set(0, panelY, 0);
   }
 
   setPosition(x: number, y: number, z: number) {
@@ -58,6 +95,7 @@ export class CameraPanel extends DraggablePanel {
     // Adjust y to be centered or below title
     this.videoMesh.position.y = -0.1;
 
-    this.entity.object3D.add(this.videoMesh);
+    // Attach to panelEntity, not the handle/root
+    this.panelEntity.object3D.add(this.videoMesh);
   }
 }
