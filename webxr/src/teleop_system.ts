@@ -52,10 +52,11 @@ export class TeleopSystem extends createSystem({
       cameraButton.addEventListener("click", () => {
         this.queries.cameraPanel.results.forEach((entity) => {
           if (entity.object3D) {
-            // If the panel is a child of a handle (DraggablePanel structure), toggle the handle
-            const target = (entity.object3D.parent && entity.object3D.parent.type !== 'Scene') 
-              ? entity.object3D.parent 
-              : entity.object3D;
+            // Traverse up to find the root-most object (Handle) that is attached to the Scene
+            let target = entity.object3D;
+            while (target.parent && target.parent.type !== 'Scene') {
+              target = target.parent;
+            }
             target.visible = !target.visible;
           }
         });
