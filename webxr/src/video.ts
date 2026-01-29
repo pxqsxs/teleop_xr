@@ -8,7 +8,7 @@ export class VideoClient {
   private pc: RTCPeerConnection | null = null;
   private statsTimer: number | null = null;
 
-  constructor(private url: string, private onStats: (stats: VideoStats) => void, private onTrack?: (track: MediaStreamTrack) => void) {
+  constructor(private url: string, private onStats: (stats: VideoStats) => void, private onTrack?: (track: MediaStreamTrack, trackId: string) => void) {
     this.ws = new WebSocket(url);
     this.ws.onmessage = (event) => this.handleMessage(JSON.parse(event.data));
     this.ws.onopen = () => {
@@ -21,7 +21,9 @@ export class VideoClient {
       this.pc = new RTCPeerConnection();
       this.pc.ontrack = (event) => {
         if (this.onTrack && event.track.kind === "video") {
-          this.onTrack(event.track);
+          // Use transceiver mid or track id as identifier
+          const trackId = event.transceiver?.mid || event.track.id;
+          this.onTrack(event.track, trackId);
         }
       };
       this.pc.onicecandidate = (e) => {

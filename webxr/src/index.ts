@@ -31,9 +31,16 @@ import { RobotSystem } from "./robot.js";
 
 import { VideoClient } from "./video.js";
 
-import { DraggablePanel, CameraPanel } from "./panels.js";
+import { DraggablePanel, CameraPanel, ControllerCameraPanel } from "./panels.js";
+
+import { ControllerCameraPanelSystem } from "./controller_camera_system.js";
 
 import { GlobalRefs } from "./global_refs.js";
+
+import { initConsoleStream } from "./console_stream.js";
+
+// Initialize console streaming for Quest VR debugging
+initConsoleStream();
 
 const assets: AssetManifest = {
   chimeSound: {
@@ -126,14 +133,32 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
     GlobalRefs.cameraPanelRoot = cameraPanel.entity.object3D;
   }
 
+  // Controller-attached camera panels (for wrist cameras)
+  const leftControllerPanel = new ControllerCameraPanel(world, "left");
+  const rightControllerPanel = new ControllerCameraPanel(world, "right");
+
+  // Video connection
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const videoWsUrl = `${protocol}//${window.location.host}/ws`;
 
+  // Track assignment: first track -> left, second -> right
+  // (or use trackId if server provides left/right metadata)
+  let trackCount = 0;
   const videoClient = new VideoClient(
     videoWsUrl,
     (stats) => {},
-    (track) => {
+    (track, trackId) => {
+      // Main camera panel gets first track
       cameraPanel.setVideoTrack(track);
+      
+      // Assign to controller panels based on trackId or order
+      if (trackId.includes("left") || trackCount === 0) {
+        leftControllerPanel.setVideoTrack(track);
+      }
+      if (trackId.includes("right") || trackCount === 1) {
+        rightControllerPanel.setVideoTrack(track);
+      }
+      trackCount++;
     },
   );
 
@@ -152,4 +177,19 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
 
   world.registerSystem(PanelSystem);
   world.registerSystem(TeleopSystem);
+  world.registerSystem(ControllerCameraPanelSystem);
+
+  // Register controller panels with their raySpaces once XR session starts
+  // The system will handle waiting for raySpaces to be available
+  const controllerCameraSystem = world.getSystem(ControllerCameraPanelSystem);
+  if (controllerCameraSystem) {
+    // Register with callbacks that resolve raySpaces dynamically
+    const getLeftRaySpace = () => world.player?.raySpaces?.left;
+    const getRightRaySpace = () => world.player?.raySpaces?.right;
+    
+    // The system expects controllerObject - we'll modify the system to handle getters
+    // For now, pass a reference that will be resolved each frame
+    (controllerCameraSystem as any).registerPanelWithGetter(leftControllerPanel, getLeftRaySpace);
+    (controllerCameraSystem as any).registerPanelWithGetter(rightControllerPanel, getRightRaySpace);
+  }
 });

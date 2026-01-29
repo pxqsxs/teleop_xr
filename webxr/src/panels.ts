@@ -1,5 +1,5 @@
 import { World, PanelUI, Interactable, DistanceGrabbable, MovementMode, Visibility } from "@iwsdk/core";
-import { Mesh, PlaneGeometry, MeshBasicMaterial, VideoTexture, DoubleSide, BoxGeometry } from "three";
+import { Mesh, PlaneGeometry, MeshBasicMaterial, VideoTexture, DoubleSide, BoxGeometry, Object3D, Vector3, Quaternion } from "three";
 
 export class DraggablePanel {
   public entity: any;
@@ -99,5 +99,53 @@ export class CameraPanel extends DraggablePanel {
 
     // Attach to panelEntity, not the handle/root
     this.panelEntity.object3D.add(this.videoMesh);
+  }
+}
+
+export class ControllerCameraPanel {
+  public entity: any;
+  public handedness: "left" | "right";
+  private videoMesh: Mesh | null = null;
+  private videoElement: HTMLVideoElement | null = null;
+
+  constructor(world: World, handedness: "left" | "right") {
+    this.handedness = handedness;
+    
+    // Create a simple transform entity (no grabbable, no panel UI)
+    this.entity = world.createTransformEntity();
+    
+    // Create a background plane for the video
+    const bgGeo = new PlaneGeometry(0.2, 0.15);
+    const bgMat = new MeshBasicMaterial({ 
+      color: 0x1a1a1a,
+      transparent: true,
+      opacity: 0.9,
+      side: DoubleSide
+    });
+    const bgMesh = new Mesh(bgGeo, bgMat);
+    this.entity.object3D.add(bgMesh);
+  }
+
+  setVideoTrack(track: MediaStreamTrack) {
+    if (this.videoMesh) return; // Already set
+
+    const stream = new MediaStream([track]);
+    this.videoElement = document.createElement("video");
+    this.videoElement.srcObject = stream;
+    this.videoElement.playsInline = true;
+    this.videoElement.muted = true;
+    this.videoElement.style.display = "none";
+    document.body.appendChild(this.videoElement);
+
+    this.videoElement.play().catch(e => {
+      console.error(`Video play error: ${e}`);
+    });
+
+    const texture = new VideoTexture(this.videoElement);
+    const geometry = new PlaneGeometry(0.18, 0.135); // Slightly smaller than bg
+    const material = new MeshBasicMaterial({ map: texture, side: DoubleSide });
+    this.videoMesh = new Mesh(geometry, material);
+    this.videoMesh.position.z = 0.001; // Slightly in front of bg
+    this.entity.object3D.add(this.videoMesh);
   }
 }

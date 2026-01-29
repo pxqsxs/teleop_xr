@@ -436,6 +436,12 @@ class Teleop:
 
                     if message.get("type") == "xr_state":
                         self.__handle_xr_state(message["data"])
+                    elif message.get("type") == "console_log":
+                        # Stream console logs from WebXR to terminal
+                        log_data = message.get("data", {})
+                        level = log_data.get("level", "log")
+                        msg = log_data.get("message", "")
+                        self.__logger.info(f"[WebXR:{level}] {msg}")
                     elif message.get("type") in {
                         "video_request",
                         "video_answer",
