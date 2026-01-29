@@ -6,7 +6,6 @@ import {
   UIKitDocument,
 } from "@iwsdk/core";
 import { Quaternion, Vector3 } from "@iwsdk/core";
-import { Robot } from "./robot";
 import { GlobalRefs } from "./global_refs";
 import { setCameraViewsConfig } from "./camera_views";
 
@@ -19,9 +18,6 @@ export class TeleopSystem extends createSystem({
   teleopPanel: {
     required: [PanelUI, PanelDocument],
     where: [eq(PanelUI, "config", "./ui/teleop.json")],
-  },
-  robot: {
-    required: [Robot],
   },
 }) {
   private ws: WebSocket | null = null;

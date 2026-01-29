@@ -25,10 +25,6 @@ import { PanelSystem } from "./panel.js";
 
 import { TeleopSystem } from "./teleop_system.js";
 
-import { Robot } from "./robot.js";
-
-import { RobotSystem } from "./robot.js";
-
 import { VideoClient } from "./video.js";
 
 import { DraggablePanel, CameraPanel, ControllerCameraPanel } from "./panels.js";
@@ -51,22 +47,6 @@ const assets: AssetManifest = {
     url: "./audio/chime.mp3",
     type: AssetType.Audio,
     priority: "background",
-  },
-  webxr: {
-    url: "./textures/webxr.png",
-    type: AssetType.Texture,
-    priority: "critical",
-  },
-
-  plantSansevieria: {
-    url: "./gltf/plantSansevieria/plantSansevieria.gltf",
-    type: AssetType.GLTF,
-    priority: "critical",
-  },
-  robot: {
-    url: "./gltf/robot/robot.gltf",
-    type: AssetType.GLTF,
-    priority: "critical",
   },
 };
 
@@ -95,33 +75,6 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
   const { camera } = world;
 
   camera.position.set(0, 1, 0.5);
-
-  const { scene: plantMesh } = AssetManager.getGLTF("plantSansevieria")!;
-
-  plantMesh.position.set(1.2, 0.2, -1.8);
-  plantMesh.scale.setScalar(2);
-
-  world
-    .createTransformEntity(plantMesh)
-    .addComponent(Interactable)
-    .addComponent(DistanceGrabbable, {
-      movementMode: MovementMode.MoveFromTarget,
-    });
-
-  const { scene: robotMesh } = AssetManager.getGLTF("robot")!;
-  // defaults for AR
-  robotMesh.position.set(-1.2, 0.4, -1.8);
-  robotMesh.scale.setScalar(1);
-
-  world
-    .createTransformEntity(robotMesh)
-    .addComponent(Interactable)
-    .addComponent(Robot)
-    .addComponent(AudioSource, {
-      src: "./audio/chime.mp3",
-      maxInstances: 3,
-      playbackMode: PlaybackMode.FadeRestart,
-    });
 
   const teleopPanel = new DraggablePanel(world, "./ui/teleop.json", {
     maxHeight: 0.8,
@@ -211,19 +164,6 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
       trackCount++;
     },
   );
-
-  const webxrLogoTexture = AssetManager.getTexture("webxr")!;
-  webxrLogoTexture.colorSpace = SRGBColorSpace;
-  const logoBanner = new Mesh(
-    new PlaneGeometry(3.39, 0.96),
-    new MeshBasicMaterial({
-      map: webxrLogoTexture,
-      transparent: true,
-    }),
-  );
-  world.createTransformEntity(logoBanner);
-  logoBanner.position.set(0, 1, 1.8);
-  logoBanner.rotateY(Math.PI);
 
   world.registerSystem(PanelSystem);
   world.registerSystem(TeleopSystem);
