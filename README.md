@@ -30,7 +30,7 @@ pip install teleop-xr
 Start the server:
 
 ```bash
-python -m teleop_xr.basic
+python -m teleop_xr.demo
 ```
 
 Then, open the displayed URL (e.g., `https://<your-ip>:4433`) in your headset's browser.
@@ -69,7 +69,7 @@ For developers contributing to TeleopXR or customizing the frontend:
 4.  **Run from source:**
     ```bash
     # From the root directory
-    uv run python -m teleop_xr.basic
+    uv run python -m teleop_xr.demo
     ```
 
 ## License
