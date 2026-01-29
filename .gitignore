@@ -1,4 +1,7 @@
 *.pyc
 *.egg-info
 build/
+dist/
+webxr/node_modules/
+webxr/dist/
 .worktrees/
