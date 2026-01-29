@@ -1,57 +1,50 @@
-import argparse
 import numpy as np
+import tyro
+from dataclasses import dataclass
+from typing import Union
 from teleop_xr import Teleop
-from teleop_xr.camera_views import (
-    build_camera_views_config,
-    build_video_streams,
-    parse_device_spec,
-)
+from teleop_xr.config import TeleopSettings
+from teleop_xr.common_cli import CommonCLI
+from teleop_xr.camera_views import build_camera_views_config
+
+
+@dataclass
+class BasicCLI(CommonCLI):
+    # Devices can be int (index) or str (path)
+    head_device: Union[int, str, None] = None
+    wrist_left_device: Union[int, str, None] = None
+    wrist_right_device: Union[int, str, None] = None
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--head-device")
-    parser.add_argument("--wrist-left-device")
-    parser.add_argument("--wrist-right-device")
-    args = parser.parse_args()
+    cli = tyro.cli(BasicCLI)
 
-    try:
-        head = (
-            parse_device_spec(args.head_device)
-            if args.head_device is not None
-            else None
-        )
-        wrist_left = (
-            parse_device_spec(args.wrist_left_device)
-            if args.wrist_left_device is not None
-            else None
-        )
-        wrist_right = (
-            parse_device_spec(args.wrist_right_device)
-            if args.wrist_right_device is not None
-            else None
-        )
+    # Backward compatibility: default to head on device 0 if no flags provided
+    if (
+        cli.head_device is None
+        and cli.wrist_left_device is None
+        and cli.wrist_right_device is None
+    ):
+        cli.head_device = 0  # Default to index 0
 
-        # Backward compatibility: default to head on device 0 if no flags provided
-        if head is None and wrist_left is None and wrist_right is None:
-            head = 0
-
-        camera_views = build_camera_views_config(
-            head=head,
-            wrist_left=wrist_left,
-            wrist_right=wrist_right,
-        )
-    except ValueError as e:
-        parser.error(str(e))
+    camera_views = build_camera_views_config(
+        head=cli.head_device,
+        wrist_left=cli.wrist_left_device,
+        wrist_right=cli.wrist_right_device,
+    )
 
     def callback(pose, xr_state):
         return
-        print(f"Pose: {pose}")
-        print(f"XR State: {xr_state}")
 
-    teleop = Teleop(camera_views=camera_views)
+    settings = TeleopSettings(
+        host=cli.host,
+        port=cli.port,
+        input_mode=cli.input_mode,
+        camera_views=camera_views,
+    )
+
+    teleop = Teleop(settings=settings)
     teleop.set_pose(np.eye(4))
-    teleop.set_video_streams(build_video_streams(camera_views))
     teleop.subscribe(callback)
     teleop.run()
 

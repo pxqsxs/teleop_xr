@@ -41,6 +41,8 @@ dependencies = [
   "aiortc",
   "opencv-python",
   "av",
+  "tyro>=0.8.0",
+  "pydantic>=2.0.0",
 ]
 
 [project.urls]
