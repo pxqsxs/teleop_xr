@@ -8,6 +8,8 @@ import {
 import { Quaternion, Vector3 } from "@iwsdk/core";
 import { GlobalRefs } from "./global_refs";
 import { setCameraViewsConfig } from "./camera_views";
+import { getCameraEnabled, setCameraEnabled } from "./camera_config";
+import { CameraViewKey } from "./track_routing";
 
 type DevicePose = {
   position: { x: number; y: number; z: number };
@@ -52,20 +54,48 @@ export class TeleopSystem extends createSystem({
           // Use GlobalRefs - populated by index.ts at creation time
           // DO NOT access ECS queries during click events (causes freeze)
 
-          // Determine target state: if any camera is visible, target is HIDDEN. If all hidden, target is VISIBLE.
-          const panels = [
-            ...Array.from(GlobalRefs.cameraPanels.values()),
-            GlobalRefs.leftWristPanelRoot,
-            GlobalRefs.rightWristPanelRoot,
-          ].filter((p) => !!p);
+          // Determine target state based on currently visible AND enabled panels
+          const floatingPanels = Array.from(GlobalRefs.cameraPanels.entries()).map(([key, panel]) => ({ key, panel }));
+          const wristPanels = [
+            { key: "wrist_left", panel: GlobalRefs.leftWristPanel },
+            { key: "wrist_right", panel: GlobalRefs.rightWristPanel },
+          ];
 
-          const anyVisible = panels.some((p) => p.visible);
-          const targetVisible = !anyVisible;
+          const allPanelRefs = [...floatingPanels, ...wristPanels].filter(p => !!p.panel);
 
-          // Apply targetVisible to all existing panels
-          panels.forEach((p) => {
-            p.visible = targetVisible;
+          // Find if any enabled panel is currently visible
+          const anyEnabledVisible = allPanelRefs.some(({ key, panel }) => {
+            const enabled = getCameraEnabled(key as CameraViewKey);
+            return enabled && panel.entity && panel.entity.object3D && panel.entity.object3D.visible;
           });
+
+          const targetVisible = !anyEnabledVisible;
+
+          // Apply targetVisible ONLY to enabled panels. Disabled panels stay hidden.
+          allPanelRefs.forEach(({ key, panel }) => {
+            if (panel.entity && panel.entity.object3D) {
+              const enabled = getCameraEnabled(key as CameraViewKey);
+              if (targetVisible && enabled) {
+                // Only show if it has an active video track
+                if (typeof panel.hasVideoTrack === "function" && panel.hasVideoTrack()) {
+                  panel.entity.object3D.visible = true;
+                }
+              } else {
+                // Always hide if target is hidden OR if panel is disabled
+                panel.entity.object3D.visible = false;
+              }
+            }
+          });
+        });
+      }
+
+      const cameraSettingsBtn = document.getElementById("camera-settings-btn");
+      if (cameraSettingsBtn) {
+        cameraSettingsBtn.addEventListener("click", () => {
+          const panel = GlobalRefs.cameraSettingsPanel;
+          if (panel && panel.entity.object3D) {
+            panel.entity.object3D.visible = !panel.entity.object3D.visible;
+          }
         });
       }
 
@@ -113,10 +143,14 @@ export class TeleopSystem extends createSystem({
       return;
     }
 
-    this.statusText.setProperties({
-      text,
-      className: connected ? "status-value connected" : "status-value",
-    });
+    this.statusText.setProperties({ text });
+    if (this.statusText.classList) {
+      if (connected) {
+        this.statusText.classList.add("connected");
+      } else {
+        this.statusText.classList.remove("connected");
+      }
+    }
   }
 
   poseFromObject(object: any): DevicePose | null {

@@ -73,6 +73,7 @@
     text-align: center;
     cursor: pointer;
   }
+
 </style>
 <div class="panel-container">
   <span class="heading"> Teleop Control </span>
@@ -93,6 +94,7 @@
       <span id="latency-text" class="value">0ms</span>
     </div>
   </div>
-  <button id="camera-button" class="button">Toggle Camera</button>
+  <button id="camera-button" class="button">Toggle Cameras</button>
+  <button id="camera-settings-btn" class="button">Camera Settings</button>
   <button id="xr-button" class="button">Enter XR</button>
 </div>

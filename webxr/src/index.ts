@@ -27,15 +27,17 @@ import { TeleopSystem } from "./teleop_system.js";
 
 import { VideoClient } from "./video.js";
 
-import { DraggablePanel, CameraPanel, ControllerCameraPanel } from "./panels.js";
+import { DraggablePanel, CameraPanel, ControllerCameraPanel, CameraPanelSystem, PanelHoverSystem } from "./panels.js";
 
 import { ControllerCameraPanelSystem } from "./controller_camera_system.js";
+import { CameraSettingsSystem } from "./camera_settings_system.js";
 
 import { GlobalRefs } from "./global_refs.js";
 
 import { initConsoleStream } from "./console_stream.js";
 import { onCameraViewsChanged, isViewEnabled, getCameraViewsConfig } from "./camera_views.js";
 import { resolveTrackView, type CameraViewKey } from "./track_routing.js";
+import { onCameraConfigChanged, getCameraEnabled } from "./camera_config.js";
 
 // Initialize console streaming for Quest VR debugging
 initConsoleStream();
@@ -81,63 +83,34 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
     maxWidth: 1.6,
   });
   teleopPanel.setPosition(0, 1.29, -1.9);
+  teleopPanel.faceUser();
   if (teleopPanel.entity.object3D) {
     GlobalRefs.teleopPanelRoot = teleopPanel.entity.object3D;
   }
 
-  // Camera panels map
+  const cameraSettingsPanel = new DraggablePanel(world, "./ui/camera_settings.json", {
+    maxHeight: 0.6,
+    maxWidth: 1.2,
+  });
+  cameraSettingsPanel.setPosition(0.8, 1.29, -1.7);
+  cameraSettingsPanel.faceUser();
+  if (cameraSettingsPanel.entity.object3D) {
+    GlobalRefs.cameraSettingsPanel = cameraSettingsPanel;
+    cameraSettingsPanel.entity.object3D.visible = false;
+  }
+
   const cameraPanels = new Map<string, CameraPanel>();
 
   // Controller-attached camera panels (for wrist cameras)
   const leftControllerPanel = new ControllerCameraPanel(world, "left");
-  if (leftControllerPanel.entity.object3D) {
-    GlobalRefs.leftWristPanelRoot = leftControllerPanel.entity.object3D;
-  }
+  GlobalRefs.leftWristPanel = leftControllerPanel;
+
   const rightControllerPanel = new ControllerCameraPanel(world, "right");
-  if (rightControllerPanel.entity.object3D) {
-    GlobalRefs.rightWristPanelRoot = rightControllerPanel.entity.object3D;
-  }
+  GlobalRefs.rightWristPanel = rightControllerPanel;
 
-  onCameraViewsChanged((config) => {
-    if (leftControllerPanel.entity.object3D) {
-      leftControllerPanel.entity.object3D.visible = isViewEnabled("wrist_left");
-    }
-    if (rightControllerPanel.entity.object3D) {
-      rightControllerPanel.entity.object3D.visible = isViewEnabled("wrist_right");
-    }
-
-    const allKeys = Object.keys(config);
-    const reserved = ["wrist_left", "wrist_right"];
-    const floatingKeys = allKeys.filter((k) => !reserved.includes(k)).sort();
-
-    console.log("[Video] Updating camera panels. Config keys:", allKeys, "Floating:", floatingKeys);
-
-    floatingKeys.forEach((key, index) => {
-      let panel = cameraPanels.get(key);
-      if (!panel) {
-        panel = new CameraPanel(world);
-        cameraPanels.set(key, panel);
-
-        if (panel.entity.object3D) {
-          GlobalRefs.cameraPanels.set(key, panel.entity.object3D);
-          // Only disable initial visibility if this is the HEAD panel and disableHeadCameraPanel is true
-          const shouldHide = key === "head" && disableHeadCameraPanel;
-          panel.entity.object3D.visible = !shouldHide;
-        }
-      }
-
-      const x = 1.2 + index * 0.9;
-      panel.setPosition(x, 1.3, -1.5);
-    });
-
-    for (const [key, panel] of cameraPanels.entries()) {
-      if (!floatingKeys.includes(key)) {
-        panel.dispose();
-        cameraPanels.delete(key);
-        GlobalRefs.cameraPanels.delete(key);
-      }
-    }
-  });
+  // Pending tracks queue for tracks that arrive before config
+  const pendingTracks: Array<{ track: MediaStreamTrack; trackId: string; index: number }> = [];
+  let configReceived = false;
 
   const getFallbackOrder = (): string[] => {
     const config = getCameraViewsConfig();
@@ -152,20 +125,16 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
       return defaultKeys;
     }
 
-    // Sort keys alphabetically but prioritize head, then wrists
     keys.sort();
-
     const prioritized = ["head", "wrist_left", "wrist_right"];
     const result: string[] = [];
 
-    // Add prioritized keys if they exist in config
     for (const key of prioritized) {
       if (keys.includes(key)) {
         result.push(key);
       }
     }
 
-    // Add remaining keys
     for (const key of keys) {
       if (!prioritized.includes(key)) {
         result.push(key);
@@ -175,45 +144,135 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
     return result;
   };
 
+  const assignTrackToPanel = (track: MediaStreamTrack, trackId: string, trackIndex: number) => {
+    const targetView = resolveTrackView(trackId, trackIndex, getFallbackOrder());
+
+    console.log(`[Video] Assigning track. ID: ${trackId}, Index: ${trackIndex}, Target: ${targetView}`);
+
+    if (!targetView) {
+      return;
+    }
+
+    if (targetView === "wrist_left") {
+      leftControllerPanel.setVideoTrack(track);
+    } else if (targetView === "wrist_right") {
+      rightControllerPanel.setVideoTrack(track);
+    } else {
+      const panel = cameraPanels.get(targetView);
+      if (panel) {
+        if (targetView !== "head" || !disableHeadCameraPanel) {
+          panel.setVideoTrack(track);
+        }
+      } else {
+        console.warn(`[Video] Target view '${targetView}' not found`, Array.from(cameraPanels.keys()));
+      }
+    }
+  };
+
+  const processPendingTracks = () => {
+    if (pendingTracks.length === 0) return;
+    console.log(`[Video] Processing ${pendingTracks.length} pending tracks`);
+    for (const { track, trackId, index } of pendingTracks) {
+      assignTrackToPanel(track, trackId, index);
+    }
+    pendingTracks.length = 0;
+  };
+
+  onCameraViewsChanged((config) => {
+    try {
+      if (leftControllerPanel.entity.object3D) {
+        leftControllerPanel.entity.object3D.visible = isViewEnabled("wrist_left") && getCameraEnabled("wrist_left");
+      }
+      if (rightControllerPanel.entity.object3D) {
+        rightControllerPanel.entity.object3D.visible = isViewEnabled("wrist_right") && getCameraEnabled("wrist_right");
+      }
+
+      const allKeys = Object.keys(config);
+      const reserved = ["wrist_left", "wrist_right"];
+      const floatingKeys = allKeys.filter((k) => !reserved.includes(k)).sort();
+
+      console.log("[Video] Updating camera panels. Config keys:", allKeys, "Floating:", floatingKeys);
+
+      floatingKeys.forEach((key, index) => {
+        let panel = cameraPanels.get(key);
+        if (!panel) {
+          console.log(`[Video] Creating new CameraPanel for key: ${key}`);
+          panel = new CameraPanel(world);
+          cameraPanels.set(key, panel);
+
+          GlobalRefs.cameraPanels.set(key, panel);
+          const shouldHide = (key === "head" && disableHeadCameraPanel) || !getCameraEnabled(key as CameraViewKey);
+          if (panel.entity && panel.entity.object3D) {
+            panel.entity.object3D.visible = !shouldHide;
+          }
+        }
+
+        panel.setLabel(`CAMERA: ${key.toUpperCase()}`);
+
+        const x = 1.2 + index * 0.9;
+        if (panel && typeof panel.setPosition === "function") {
+          panel.setPosition(x, 1.3, -1.5);
+          panel.faceUser();
+        } else {
+          console.error(`[Video] panel.setPosition is missing for key: ${key}`);
+        }
+      });
+
+      for (const [key, panel] of Array.from(cameraPanels.entries())) {
+        if (!floatingKeys.includes(key)) {
+          console.log(`[Video] Disposing panel for key: ${key}`);
+          panel.dispose();
+          cameraPanels.delete(key);
+          GlobalRefs.cameraPanels.delete(key);
+        } else if (panel.entity && panel.entity.object3D) {
+          panel.entity.object3D.visible = isViewEnabled(key) && getCameraEnabled(key as CameraViewKey);
+        }
+      }
+
+      if (allKeys.length > 0 && !configReceived) {
+        configReceived = true;
+        setTimeout(() => processPendingTracks(), 50);
+      }
+    } catch (err) {
+      console.error("[Video] Error in onCameraViewsChanged handler:", err);
+      if (err instanceof Error) {
+        console.error("[Video] Stack trace:", err.stack);
+      } else {
+        console.error("[Video] Error detail:", JSON.stringify(err));
+      }
+    }
+  });
+
+  onCameraConfigChanged((config) => {
+    if (leftControllerPanel.entity.object3D) {
+      leftControllerPanel.entity.object3D.visible = isViewEnabled("wrist_left") && getCameraEnabled("wrist_left");
+    }
+    if (rightControllerPanel.entity.object3D) {
+      rightControllerPanel.entity.object3D.visible = isViewEnabled("wrist_right") && getCameraEnabled("wrist_right");
+    }
+    for (const [key, panel] of cameraPanels.entries()) {
+      if (panel.entity.object3D) {
+        panel.entity.object3D.visible = isViewEnabled(key) && getCameraEnabled(key as CameraViewKey);
+      }
+    }
+  });
+
   // Video connection
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const videoWsUrl = `${protocol}//${window.location.host}/ws`;
 
-  // Track assignment: use trackId mapping with order-based fallback
   let trackCount = 0;
   const videoClient = new VideoClient(
     videoWsUrl,
     (stats) => {},
     (track, trackId) => {
-      const targetView = resolveTrackView(trackId, trackCount, getFallbackOrder());
+      console.log(`[Video] New track received. ID: ${trackId}, Index: ${trackCount}, ConfigReceived: ${configReceived}`);
 
-      // Log routing decisions for debugging
-      console.log(`[Video] New track received. ID: ${trackId}, Index: ${trackCount}, Resolved Target: ${targetView}`);
-
-      if (!targetView) {
-        trackCount++;
-        return;
-      }
-
-      if (targetView === "wrist_left") {
-        console.log(`[Video] Assigning to Left Wrist`);
-        leftControllerPanel.setVideoTrack(track);
-      } else if (targetView === "wrist_right") {
-        console.log(`[Video] Assigning to Right Wrist`);
-        rightControllerPanel.setVideoTrack(track);
+      if (!configReceived) {
+        pendingTracks.push({ track, trackId, index: trackCount });
+        console.log(`[Video] Queued track ${trackCount} (awaiting config)`);
       } else {
-        const panel = cameraPanels.get(targetView);
-        if (panel) {
-          console.log(`[Video] Assigning to Floating Panel: ${targetView}`);
-          // Allow video assignment for all panels unless it's HEAD and explicitly disabled
-          if (targetView !== "head" || !disableHeadCameraPanel) {
-            panel.setVideoTrack(track);
-          } else {
-            console.log(`[Video] Head panel disabled by config`);
-          }
-        } else {
-           console.warn(`[Video] Target view '${targetView}' not found in cameraPanels map`, Array.from(cameraPanels.keys()));
-        }
+        assignTrackToPanel(track, trackId, trackCount);
       }
       trackCount++;
     },
@@ -222,6 +281,9 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
   world.registerSystem(PanelSystem);
   world.registerSystem(TeleopSystem);
   world.registerSystem(ControllerCameraPanelSystem);
+  world.registerSystem(CameraSettingsSystem);
+  world.registerSystem(CameraPanelSystem);
+  world.registerSystem(PanelHoverSystem);
 
   // Register controller panels with their raySpaces once XR session starts
   // The system will handle waiting for raySpaces to be available
