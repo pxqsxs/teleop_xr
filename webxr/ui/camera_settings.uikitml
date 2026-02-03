@@ -1,121 +1,89 @@
 <style>
-  .panel-container {
-    align-items: flex-start;
-    padding: 2;
-    width: 50;
-    display: flex;
-    flex-direction: column;
-    background-color: #09090b;
-    border-color: #27272a;
-    border-width: 0.15;
-    border-radius: 3;
-  }
-
-  .heading {
-    font-size: 3.5;
-    font-weight: medium;
-    color: #fafafa;
-    text-align: left;
-  }
-
-  .sub-heading {
-    font-size: 2;
-    color: #a1a1aa;
-    text-align: left;
-    margin-top: 0.3;
-  }
-
-  .toggle-container {
-    margin-top: 1.5;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .toggle-row {
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-    justify-content: space-between;
-    align-items: center;
-    padding-top: 0.8;
-    padding-bottom: 0.8;
-    border-bottom-width: 0.05;
-    border-color: #27272a;
-  }
-
-  .toggle-label {
-    font-size: 2.2;
-    color: #fafafa;
-  }
-
-  .toggle-btn {
-    width: 12;
-    padding: 0.8;
-    background-color: #27272a;
-    color: #a1a1aa;
-    border-radius: 1.5;
-    border-width: 0.1;
-    border-color: #3f3f46;
-    font-size: 1.8;
-    font-weight: medium;
-    text-align: center;
-    cursor: pointer;
-  }
-
-  .toggle-btn.active {
-    background-color: #22c55e;
-    color: #ffffff;
-    border-color: #22c55e;
-  }
-
   .hidden {
     display: none;
   }
-
-  .close-btn {
-    width: 100%;
-    padding: 1.2;
-    margin-top: 2;
-    background-color: #27272a;
-    color: #fafafa;
-    border-radius: 1.5;
-    border-width: 0.1;
-    border-color: #3f3f46;
-    font-size: 2;
-    font-weight: medium;
-    text-align: center;
-    cursor: pointer;
+  .active {
+    background-color: #16a34a;
+    color: #ffffff;
+    border-color: #16a34a;
+  }
+  .toggle-row {
+    display: flex;
   }
 </style>
-<div class="panel-container">
-  <span class="heading">Camera Streams</span>
-  <span class="sub-heading">Toggle visibility of camera panels</span>
-  <div id="toggle-container" class="toggle-container">
-    <div id="row-0" class="toggle-row hidden">
-      <span id="label-0" class="toggle-label">Camera 0</span>
-      <button id="btn-0" class="toggle-btn active">ON</button>
-    </div>
-    <div id="row-1" class="toggle-row hidden">
-      <span id="label-1" class="toggle-label">Camera 1</span>
-      <button id="btn-1" class="toggle-btn active">ON</button>
-    </div>
-    <div id="row-2" class="toggle-row hidden">
-      <span id="label-2" class="toggle-label">Camera 2</span>
-      <button id="btn-2" class="toggle-btn active">ON</button>
-    </div>
-    <div id="row-3" class="toggle-row hidden">
-      <span id="label-3" class="toggle-label">Camera 3</span>
-      <button id="btn-3" class="toggle-btn active">ON</button>
-    </div>
-    <div id="row-4" class="toggle-row hidden">
-      <span id="label-4" class="toggle-label">Camera 4</span>
-      <button id="btn-4" class="toggle-btn active">ON</button>
-    </div>
-    <div id="row-5" class="toggle-row hidden">
-      <span id="label-5" class="toggle-label">Camera 5</span>
-      <button id="btn-5" class="toggle-btn active">ON</button>
-    </div>
-  </div>
-  <button id="close-btn" class="close-btn">Close</button>
-</div>
+<Panel width="800" border-radius="24">
+  <Container width="100%" height="100%" background-color="#ffffff" border-radius="24" flex-direction="column" padding="40" gap="20">
+    <Container flex-direction="column" gap="10">
+      <Text font-size="48" font-weight="bold" color="#09090b" text="Camera Settings" />
+      <Text font-size="24" color="#52525b" text="Toggle visibility of camera panels" />
+    </Container>
+
+    <Container flex-direction="column" width="100%" gap="16">
+
+      <!-- Row 0 -->
+      <Container id="row-0" class="hidden" flex-direction="row" justify-content="space-between" align-items="center" background-color="#f4f4f5" padding="20" border-radius="16">
+        <Container flex-grow="1">
+          <Text id="label-0" font-size="32" color="#09090b" text="Camera 0" />
+        </Container>
+        <Container id="switch-0" width="80" height="40" flex-shrink="0" background-color="#ef4444" border-radius="24" align-items="center" justify-content="center">
+          <Text id="switch-text-0" text="OFF" font-size="20" font-weight="bold" color="#ffffff" />
+        </Container>
+      </Container>
+
+      <!-- Row 1 -->
+      <Container id="row-1" class="hidden" flex-direction="row" justify-content="space-between" align-items="center" background-color="#f4f4f5" padding="20" border-radius="16">
+        <Container flex-grow="1">
+          <Text id="label-1" font-size="32" color="#09090b" text="Camera 1" />
+        </Container>
+        <Container id="switch-1" width="80" height="40" flex-shrink="0" background-color="#ef4444" border-radius="24" align-items="center" justify-content="center">
+          <Text id="switch-text-1" text="OFF" font-size="20" font-weight="bold" color="#ffffff" />
+        </Container>
+      </Container>
+
+      <!-- Row 2 -->
+      <Container id="row-2" class="hidden" flex-direction="row" justify-content="space-between" align-items="center" background-color="#f4f4f5" padding="20" border-radius="16">
+        <Container flex-grow="1">
+          <Text id="label-2" font-size="32" color="#09090b" text="Camera 2" />
+        </Container>
+        <Container id="switch-2" width="80" height="40" flex-shrink="0" background-color="#ef4444" border-radius="24" align-items="center" justify-content="center">
+          <Text id="switch-text-2" text="OFF" font-size="20" font-weight="bold" color="#ffffff" />
+        </Container>
+      </Container>
+
+      <!-- Row 3 -->
+      <Container id="row-3" class="hidden" flex-direction="row" justify-content="space-between" align-items="center" background-color="#f4f4f5" padding="20" border-radius="16">
+        <Container flex-grow="1">
+          <Text id="label-3" font-size="32" color="#09090b" text="Camera 3" />
+        </Container>
+        <Container id="switch-3" width="80" height="40" flex-shrink="0" background-color="#ef4444" border-radius="24" align-items="center" justify-content="center">
+          <Text id="switch-text-3" text="OFF" font-size="20" font-weight="bold" color="#ffffff" />
+        </Container>
+      </Container>
+
+      <!-- Row 4 -->
+      <Container id="row-4" class="hidden" flex-direction="row" justify-content="space-between" align-items="center" background-color="#f4f4f5" padding="20" border-radius="16">
+        <Container flex-grow="1">
+          <Text id="label-4" font-size="32" color="#09090b" text="Camera 4" />
+        </Container>
+        <Container id="switch-4" width="80" height="40" flex-shrink="0" background-color="#ef4444" border-radius="24" align-items="center" justify-content="center">
+          <Text id="switch-text-4" text="OFF" font-size="20" font-weight="bold" color="#ffffff" />
+        </Container>
+      </Container>
+
+      <!-- Row 5 -->
+      <Container id="row-5" class="hidden" flex-direction="row" justify-content="space-between" align-items="center" background-color="#f4f4f5" padding="20" border-radius="16">
+        <Container flex-grow="1">
+          <Text id="label-5" font-size="32" color="#09090b" text="Camera 5" />
+        </Container>
+        <Container id="switch-5" width="80" height="40" flex-shrink="0" background-color="#ef4444" border-radius="24" align-items="center" justify-content="center">
+          <Text id="switch-text-5" text="OFF" font-size="20" font-weight="bold" color="#ffffff" />
+        </Container>
+      </Container>
+
+    </Container>
+
+    <Button id="close-btn" width="100%" padding="24" margin-top="20" flex-direction="row" align-items="center" justify-content="center" background-color="#e4e4e7" border-radius="16">
+      <Text style="font-size: 32; font-weight: bold; color: #18181b;" text="Close" />
+    </Button>
+  </Container>
+</Panel>
