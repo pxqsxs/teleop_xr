@@ -1,13 +1,15 @@
 import threading
 import json
 import time
+import sys
 from typing import Any, Dict, List, Optional, Literal
 from dataclasses import dataclass, field, asdict
 import cv2
 import numpy as np
 import tyro
 import jax
-from teleop_xr import Teleop, TF_RUB2FLU
+from loguru import logger
+from teleop_xr import Teleop
 from teleop_xr.video_stream import ExternalVideoSource
 from teleop_xr.config import TeleopSettings
 from teleop_xr.common_cli import CommonCLI
@@ -21,6 +23,7 @@ import transforms3d as t3d
 
 try:
     import rclpy
+    from rclpy.node import Node
     from geometry_msgs.msg import Pose, PoseStamped, PoseArray, TransformStamped
     from sensor_msgs.msg import Joy, Image, CompressedImage, JointState
     from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -38,6 +41,34 @@ except ImportError:
     raise ImportError(
         "ROS2 is not sourced. Please source ROS2 before running this script."
     )
+
+
+class RosBridgeHandler:
+    """
+    Redirects Loguru messages to the ROS 2 logging system.
+    """
+
+    def __init__(self, node: Node):
+        self.ros_logger = node.get_logger()
+
+    def write(self, message):
+        # Extract the log record information
+        record = message.record
+        level = record["level"].name
+        msg = record["message"]
+
+        # Map Loguru levels to ROS 2 logging methods
+        if level == "DEBUG":
+            self.ros_logger.debug(msg)
+        elif level == "INFO":
+            self.ros_logger.info(msg)
+        elif level == "WARNING":
+            self.ros_logger.warn(msg)
+        elif level == "ERROR":
+            self.ros_logger.error(msg)
+        elif level == "CRITICAL":
+            self.ros_logger.fatal(msg)
+
 
 XR_HAND_JOINTS = [
     "wrist",
@@ -73,12 +104,11 @@ def pose_dict_to_matrix(pose):
         return None
     pos = pose["position"]
     quat = pose["orientation"]
-    mat = t3d.affines.compose(
+    return t3d.affines.compose(
         [pos["x"], pos["y"], pos["z"]],
         t3d.quaternions.quat2mat([quat["w"], quat["x"], quat["y"], quat["z"]]),
         [1.0, 1.0, 1.0],
     )
-    return TF_RUB2FLU @ mat
 
 
 def matrix_to_pose_msg(mat):
@@ -323,15 +353,30 @@ def main():
 
     if cli.list_robots:
         robots = list_available_robots()
-        print("Available robots (via entry points):")
+        logger.info("Available robots (via entry points):")
         if not robots:
-            print("  None")
+            logger.info("  None")
         for name, path in robots.items():
-            print(f"  {name}: {path}")
+            logger.info(f"  {name}: {path}")
         return
 
     rclpy.init(args=["--ros-args"] + cli.ros_args)
     node = rclpy.create_node("teleop")
+
+    # 1. Remove Loguru's default handler
+    logger.remove()
+
+    # 2. Add the ROS 2 bridge as a sink
+    bridge = RosBridgeHandler(node)
+    logger.add(bridge.write, format="{message}", level="INFO")
+
+    # 3. Add back a styled console sink for local output
+    logger.add(
+        sys.stderr,
+        colorize=True,
+        format="<green>{time}</green> <level>{message}</level>",
+        level="INFO",
+    )
 
     # --- Mode Setup ---
     robot = None

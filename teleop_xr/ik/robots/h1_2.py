@@ -1,6 +1,6 @@
 # pyright: reportCallIssue=false
 import os
-from typing import Any
+from typing import Any, override
 
 import jax
 import jax.numpy as jnp
@@ -60,6 +60,12 @@ class UnitreeH1Robot(BaseRobot):
         self.R_ee_link_idx = self.robot.links.names.index(self.R_ee)
         self.torso_link_idx = self.robot.links.names.index("torso_link")
 
+    @property
+    @override
+    def orientation(self) -> jaxlie.SO3:
+        return jaxlie.SO3.identity()
+
+    @override
     def get_vis_config(self) -> RobotVisConfig | None:
         if not self.urdf_path:
             return None
@@ -67,7 +73,9 @@ class UnitreeH1Robot(BaseRobot):
             urdf_path=self.urdf_path,
             mesh_path=self.mesh_path,
             model_scale=0.5,
-            initial_rotation_euler=[0.0, 0.0, 1.57079632679],  # Math.PI / 2
+            initial_rotation_euler=[
+                float(x) for x in self.orientation.as_rpy_radians()
+            ],
         )
 
     @property
@@ -80,6 +88,11 @@ class UnitreeH1Robot(BaseRobot):
     @property
     def actuated_joint_names(self) -> list[str]:
         return list(self.robot.joints.actuated_names)
+
+    @property
+    def default_speed_ratio(self) -> float:
+        # Unitree H1 often benefits from slightly amplified motion mapping
+        return 1.2
 
     def forward_kinematics(self, config: jax.Array) -> dict[str, jaxlie.SE3]:
         """
@@ -113,18 +126,18 @@ class UnitreeH1Robot(BaseRobot):
                 pk.costs.rest_cost(
                     JointVar(0),
                     rest_pose=q_current,
-                    weight=1.0,
+                    weight=5.0,
                 )
             )
 
-        # costs.append(
-        #     pk.costs.manipulability_cost(
-        #         self.robot,
-        #         JointVar(0),
-        #         jnp.array([self.L_ee_link_idx], dtype=jnp.int32),
-        #         weight=1.0,
-        #     )
-        # )
+        costs.append(
+            pk.costs.manipulability_cost(
+                self.robot,
+                JointVar(0),
+                jnp.array([self.L_ee_link_idx], dtype=jnp.int32),
+                weight=0.01,
+            )
+        )
 
         # costs.append(
         #     pk.costs.self_collision_cost(
@@ -168,16 +181,16 @@ class UnitreeH1Robot(BaseRobot):
             )
         )
 
-        if target_Head is not None:
-            costs.append(
-                pk.costs.pose_cost(  # pyright: ignore[reportCallIssue]
-                    robot=self.robot,
-                    joint_var=JointVar(0),
-                    target_pose=target_Head,
-                    target_link_index=jnp.array(self.torso_link_idx, dtype=jnp.int32),
-                    pos_weight=0.0,
-                    ori_weight=jnp.array([0.0, 0.0, 20.0]),
-                )
-            )
+        # if target_Head is not None:
+        #     costs.append(
+        #         pk.costs.pose_cost(  # pyright: ignore[reportCallIssue]
+        #             robot=self.robot,
+        #             joint_var=JointVar(0),
+        #             target_pose=target_Head,
+        #             target_link_index=jnp.array(self.torso_link_idx, dtype=jnp.int32),
+        #             pos_weight=0.0,
+        #             ori_weight=jnp.array([0.0, 0.0, 20.0]),
+        #         )
+        #     )
 
         return costs

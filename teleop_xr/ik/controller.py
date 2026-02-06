@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 import jaxlie
 import numpy as np
+from loguru import logger
 from teleop_xr.utils.filter import WeightedMovingFilter
 from teleop_xr.messages import XRState, XRDeviceRole, XRHandedness, XRPose
 from teleop_xr.ik.robot import BaseRobot
@@ -95,15 +96,11 @@ class IKController:
         Returns:
             jaxlie.SE3: The calculated target pose for the robot end-effector.
         """
-        R_xr_to_robot = jaxlie.SO3.from_matrix(
-            jnp.array([[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
-        )
+        t_delta_ros = t_ctrl_curr.translation() - t_ctrl_init.translation()
+        t_delta_robot = self.robot.ros_to_base @ t_delta_ros
 
-        t_delta_xr = t_ctrl_curr.translation() - t_ctrl_init.translation()
-        t_delta_robot = R_xr_to_robot @ t_delta_xr
-
-        q_delta_xr = t_ctrl_curr.rotation() @ t_ctrl_init.rotation().inverse()
-        q_delta_robot = R_xr_to_robot @ q_delta_xr @ R_xr_to_robot.inverse()
+        q_delta_ros = t_ctrl_curr.rotation() @ t_ctrl_init.rotation().inverse()
+        q_delta_robot = self.robot.ros_to_base @ q_delta_ros @ self.robot.base_to_ros
 
         t_new = t_ee_init.translation() + t_delta_robot
         q_new = q_delta_robot @ t_ee_init.rotation()
@@ -134,7 +131,7 @@ class IKController:
                 if frame_name in supported:
                     poses[frame_name] = self.xr_pose_to_se3(pose_data)
                 elif frame_name not in self._warned_unsupported:
-                    print(
+                    logger.warning(
                         f"[IKController] Warning: Frame '{frame_name}' is available in XRState but not supported by robot. Skipping."
                     )
                     self._warned_unsupported.add(frame_name)
@@ -168,7 +165,7 @@ class IKController:
         self.snapshot_robot = {}
         if self.filter is not None:
             self.filter.reset()
-        print("[IKController] Reset triggered")
+        logger.info("[IKController] Reset triggered")
 
     def step(self, state: XRState, q_current: np.ndarray) -> np.ndarray:
         """
@@ -199,7 +196,7 @@ class IKController:
                 fk_poses = self.robot.forward_kinematics(jnp.asarray(q_current))
                 self.snapshot_robot = {k: fk_poses[k] for k in required_keys}
 
-                print(f"[IKController] Initial Robot FK: {self.snapshot_robot}")
+                logger.info(f"[IKController] Initial Robot FK: {self.snapshot_robot}")
                 return q_current
 
             # Active control
@@ -242,6 +239,7 @@ class IKController:
                     if self.filter.data_ready():
                         return self.filter.filtered_data
 
+                logger.debug(f"[IKController] New Config: {new_config}")
                 return new_config
 
             return q_current

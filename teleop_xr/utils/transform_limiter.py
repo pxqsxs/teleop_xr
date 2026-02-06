@@ -1,4 +1,5 @@
 import numpy as np
+from loguru import logger
 from transforms3d.quaternions import mat2quat, quat2mat
 from transforms3d.quaternions import axangle2quat, quat2axangle
 
@@ -79,7 +80,7 @@ def compute_next_transform(
     return T_tp1
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     T_tm1 = np.eye(4)
     T_t = np.array(
         [[0.998, -0.05, 0, 0.5], [0.05, 0.998, 0, 0.0], [0, 0, 1, 0.0], [0, 0, 0, 1]]
@@ -98,4 +99,4 @@ if __name__ == "__main__":
         max_ang_acc=np.radians(30),  # rad/s²
     )
 
-    print("New transform at t+1 (clamped):\n", T_tp1_clamped)
+    logger.info("New transform at t+1 (clamped):\n{}", T_tp1_clamped)

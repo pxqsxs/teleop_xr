@@ -1,6 +1,6 @@
 import io
 import os
-from typing import Any
+from typing import Any, override
 
 import jax
 import jax.numpy as jnp
@@ -63,9 +63,15 @@ class FrankaRobot(BaseRobot):
             self.ee_link_idx = len(self.robot.links.names) - 1
 
     @property
+    @override
+    def orientation(self) -> jaxlie.SO3:
+        return jaxlie.SO3.identity()
+
+    @property
     def supported_frames(self) -> set[str]:
         return {"right"}
 
+    @override
     def get_vis_config(self) -> RobotVisConfig | None:
         if not self.urdf_path:
             return None
@@ -73,7 +79,9 @@ class FrankaRobot(BaseRobot):
             urdf_path=self.urdf_path,
             mesh_path=self.mesh_path,
             model_scale=0.5,
-            initial_rotation_euler=[0.0, 0.0, 0.0],
+            initial_rotation_euler=[
+                float(x) for x in self.orientation.as_rpy_radians()
+            ],
         )
 
     @property
@@ -116,6 +124,24 @@ class FrankaRobot(BaseRobot):
     ) -> list[Cost]:
         costs = []
         JointVar = self.robot.joint_var_cls
+
+        if q_current is not None:
+            costs.append(
+                pk.costs.rest_cost(
+                    JointVar(0),
+                    rest_pose=q_current,
+                    weight=1.0,
+                )
+            )
+
+        costs.append(
+            pk.costs.manipulability_cost(
+                self.robot,
+                JointVar(0),
+                jnp.array([self.ee_link_idx], dtype=jnp.int32),
+                weight=0.001,
+            )
+        )
 
         if target_R is not None:
             costs.append(

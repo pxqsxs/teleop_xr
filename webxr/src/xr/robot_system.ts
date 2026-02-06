@@ -7,7 +7,9 @@ import {
 } from "@iwsdk/core";
 import {
 	AmbientLight,
+	AxesHelper,
 	DirectionalLight,
+	Group,
 	LoadingManager,
 	Mesh,
 	type Object3D,
@@ -15,6 +17,7 @@ import {
 	Texture,
 	Vector3,
 } from "three";
+import { ColladaLoader, GLTFLoader, STLLoader } from "three-stdlib";
 import URDFLoader from "urdf-loader";
 import { useAppStore } from "../lib/store";
 import type { Entity } from "./panels";
@@ -27,19 +30,88 @@ export class RobotModelSystem extends createSystem({}) {
 	private loader!: URDFLoader;
 	private robotEntity: Entity | null = null;
 	private robotModel: Object3D | null = null;
+	private axesHelper: AxesHelper | null = null;
 
 	init() {
 		this.loader = new URDFLoader();
 		this.loader.packages = (pkg: string) => `/robot_assets/${pkg}`;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(this.loader as any).loadMeshCb = (
+			path: string,
+			manager: LoadingManager,
+			done: (mesh: Object3D | null, err?: any) => void,
+		) => {
+			const ext = path.split(".").pop()?.toLowerCase();
+			if (ext === "glb" || ext === "gltf") {
+				new GLTFLoader(manager).load(
+					path,
+					(gltf) => done(gltf.scene),
+					undefined,
+					(err) => done(null, err),
+				);
+			} else if (ext === "stl") {
+				new STLLoader(manager).load(
+					path,
+					(geom) => done(new Mesh(geom)),
+					undefined,
+					(err) => done(null, err),
+				);
+			} else if (ext === "dae") {
+				new ColladaLoader(manager).load(
+					path,
+					(collada) => done(collada.scene),
+					undefined,
+					(err) => done(null, err),
+				);
+			} else {
+				const loader = this.loader as any;
+				if (loader.defaultMeshLoader) {
+					loader.defaultMeshLoader(path, manager, done);
+				} else {
+					done(null, new Error(`No loader available for extension "${ext}"`));
+				}
+			}
+		};
 
-		let lastRobotVisible = useAppStore.getState().advancedSettings.robotVisible;
+		let lastRobotVisible = useAppStore.getState().robotSettings.robotVisible;
+		let lastShowAxes = useAppStore.getState().robotSettings.showAxes;
 		let lastResetTrigger = useAppStore.getState().robotResetTrigger;
+		let lastDistanceGrab =
+			useAppStore.getState().robotSettings.distanceGrabEnabled;
 
 		useAppStore.subscribe((state) => {
-			if (state.advancedSettings.robotVisible !== lastRobotVisible) {
-				lastRobotVisible = state.advancedSettings.robotVisible;
+			if (state.robotSettings.robotVisible !== lastRobotVisible) {
+				lastRobotVisible = state.robotSettings.robotVisible;
 				if (this.robotEntity?.object3D) {
 					this.robotEntity.object3D.visible = lastRobotVisible;
+				}
+			}
+
+			if (state.robotSettings.showAxes !== lastShowAxes) {
+				lastShowAxes = state.robotSettings.showAxes;
+				if (this.axesHelper) {
+					this.axesHelper.visible = lastShowAxes;
+				}
+			}
+
+			if (state.robotSettings.distanceGrabEnabled !== lastDistanceGrab) {
+				lastDistanceGrab = state.robotSettings.distanceGrabEnabled;
+				if (this.robotEntity) {
+					const hasGrab = this.robotEntity.hasComponent(DistanceGrabbable);
+
+					if (lastDistanceGrab && !hasGrab) {
+						if (!this.robotEntity.hasComponent(Interactable)) {
+							this.robotEntity.addComponent(Interactable);
+						}
+						this.robotEntity.addComponent(DistanceGrabbable, {
+							movementMode: MovementMode.MoveFromTarget,
+						});
+					} else if (!lastDistanceGrab && hasGrab) {
+						this.robotEntity.removeComponent(DistanceGrabbable);
+						if (this.robotEntity.hasComponent(Interactable)) {
+							this.robotEntity.removeComponent(Interactable);
+						}
+					}
 				}
 			}
 
@@ -124,34 +196,41 @@ export class RobotModelSystem extends createSystem({}) {
 				this.robotModel = null;
 			}
 
-			robot.rotation.x = -Math.PI / 2;
-
+			const tiltNode = new Group();
+			tiltNode.rotation.x = -Math.PI / 2;
+			tiltNode.rotation.z = Math.PI / 2;
+			let rx = 0;
+			let ry = 0;
+			let rz = 0;
 			if (
 				data.initial_rotation_euler &&
 				data.initial_rotation_euler.length === 3
 			) {
-				const [rx, ry, rz] = data.initial_rotation_euler;
-				robot.rotation.x += rx;
-				robot.rotation.y += ry;
-				robot.rotation.z += rz;
+				[rx, ry, rz] = data.initial_rotation_euler;
+				// Apply rotation to the robot itself (in Z-up space)
+				robot.rotation.set(rx, ry, rz);
 			}
 
 			const scale = data.model_scale || 1.0;
 			robot.scale.set(scale, scale, scale);
 
+			tiltNode.add(robot);
+
 			this.robotModel = robot;
 
 			// Create interactable entity
-			this.robotEntity = (this.world as World)
-				.createTransformEntity()
-				.addComponent(Interactable)
-				.addComponent(DistanceGrabbable, {
+			this.robotEntity = (this.world as World).createTransformEntity();
+
+			if (useAppStore.getState().robotSettings.distanceGrabEnabled) {
+				this.robotEntity.addComponent(Interactable);
+				this.robotEntity.addComponent(DistanceGrabbable, {
 					movementMode: MovementMode.MoveFromTarget,
 				});
+			}
 
 			if (this.robotEntity?.object3D) {
 				this.robotEntity.object3D.visible =
-					useAppStore.getState().advancedSettings.robotVisible;
+					useAppStore.getState().robotSettings.robotVisible;
 			}
 
 			const robotObject = this.robotEntity?.object3D;
@@ -160,7 +239,11 @@ export class RobotModelSystem extends createSystem({}) {
 				return;
 			}
 			const robotObject3D: Object3D = robotObject;
-			robotObject3D.add(robot);
+			robotObject3D.add(tiltNode);
+
+			this.axesHelper = new AxesHelper(1.0);
+			this.axesHelper.visible = useAppStore.getState().robotSettings.showAxes;
+			tiltNode.add(this.axesHelper);
 
 			// Add lights to ensure textures are visible
 			const ambientLight = new AmbientLight(0xffffff, 0.6);
@@ -195,8 +278,7 @@ export class RobotModelSystem extends createSystem({}) {
 		if (!camera || !camera.position) {
 			return;
 		}
-		const { spawnDistance, spawnHeight } =
-			useAppStore.getState().advancedSettings;
+		const { spawnDistance, spawnHeight } = useAppStore.getState().robotSettings;
 		const cameraPosition = camera.position;
 		const forward = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
 		forward.y = 0; // Keep horizontal
@@ -213,7 +295,7 @@ export class RobotModelSystem extends createSystem({}) {
 		// Let's drop it slightly below eye level (e.g. 30cm down) so it's comfortable to look at
 		spawnPos.y = Math.max(0.5, cameraPosition.y + spawnHeight);
 		robotObject.position.copy(spawnPos);
-		robotObject.lookAt(cameraPosition.x, spawnPos.y, cameraPosition.z);
+		robotObject.rotation.set(0, 0, 0);
 	}
 
 	private processRobotMaterials(robot: Object3D) {

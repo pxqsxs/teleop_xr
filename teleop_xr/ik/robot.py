@@ -16,6 +16,23 @@ class BaseRobot(ABC):
     to compute kinematics and optimization costs.
     """
 
+    @property
+    def orientation(self) -> jaxlie.SO3:
+        """
+        Rotation from the robot's base frame to the canonical ROS2 frame (X-forward, Z-up).
+        """
+        return jaxlie.SO3.identity()
+
+    @property
+    def base_to_ros(self) -> jaxlie.SO3:
+        """Rotation from the robot base frame to the canonical ROS2 frame."""
+        return self.orientation
+
+    @property
+    def ros_to_base(self) -> jaxlie.SO3:
+        """Rotation from the canonical ROS2 frame to the robot base frame."""
+        return self.orientation.inverse()
+
     @abstractmethod
     def get_vis_config(self) -> RobotVisConfig | None:
         """
@@ -23,8 +40,12 @@ class BaseRobot(ABC):
 
         Returns:
             RobotVisConfig | None: Configuration for rendering the robot, or None if not supported.
+
+        Note:
+            Subclasses should use `self.orientation` to populate
+            `RobotVisConfig.initial_rotation_euler`.
         """
-        pass
+        pass  # pragma: no cover
 
     @property
     @abstractmethod
@@ -35,7 +56,7 @@ class BaseRobot(ABC):
         Returns:
             list[str]: A list of joint names.
         """
-        pass
+        pass  # pragma: no cover
 
     @property
     @abstractmethod
@@ -46,7 +67,7 @@ class BaseRobot(ABC):
         Returns:
             Type[jaxls.Var]: The variable class to use for optimization.
         """
-        pass
+        pass  # pragma: no cover
 
     @property
     def supported_frames(self) -> set[str]:
@@ -57,6 +78,16 @@ class BaseRobot(ABC):
             set[str]: A set of frame names (e.g., {"left", "right", "head"}).
         """
         return {"left", "right", "head"}
+
+    @property
+    def default_speed_ratio(self) -> float:
+        """
+        Get the default teleop speed ratio for this robot.
+
+        Returns:
+            float: The default speed ratio (e.g., 1.0 for 100%, 1.2 for 120%).
+        """
+        return 1.0
 
     @abstractmethod
     def forward_kinematics(self, config: jnp.ndarray) -> dict[str, jaxlie.SE3]:
@@ -70,7 +101,7 @@ class BaseRobot(ABC):
             dict[str, jaxlie.SE3]: A dictionary mapping link names (e.g., "left", "right", "head")
                                   to their respective SE3 poses.
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def get_default_config(self) -> jnp.ndarray:
@@ -80,7 +111,7 @@ class BaseRobot(ABC):
         Returns:
             jnp.ndarray: The default configuration as a JAX array.
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def build_costs(
@@ -102,4 +133,4 @@ class BaseRobot(ABC):
         Returns:
             list[Cost]: A list of jaxls Cost objects representing the optimization objectives.
         """
-        pass
+        pass  # pragma: no cover
