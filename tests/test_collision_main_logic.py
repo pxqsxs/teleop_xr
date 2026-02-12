@@ -1,7 +1,11 @@
 import pytest
-from unittest.mock import MagicMock, patch, mock_open
-import numpy as np
-from scripts.configure_sphere_collision import (
+
+pytest.importorskip("viser")
+pytest.importorskip("ballpark")
+
+from unittest.mock import MagicMock, patch, mock_open  # noqa: E402
+import numpy as np  # noqa: E402
+from scripts.configure_sphere_collision import (  # noqa: E402
     _export_collision_data,
     _run_loop_step,
     RobotSpheresResult,

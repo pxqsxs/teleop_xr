@@ -2,11 +2,11 @@ import pytest
 
 pytest.importorskip("yourdfpy")
 pytest.importorskip("ballpark")
-import io
-import pytest
-import yourdfpy
-from ballpark import Robot
-from scripts.configure_sphere_collision import (
+
+import io  # noqa: E402
+import yourdfpy  # noqa: E402
+from ballpark import Robot  # noqa: E402
+from scripts.configure_sphere_collision import (  # noqa: E402
     compute_collision_ignore_pairs,
     _process_chunk_worker,
 )

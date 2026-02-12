@@ -2,10 +2,10 @@ import pytest
 
 pytest.importorskip("viser")
 pytest.importorskip("ballpark")
-import numpy as np
-import pytest
-from unittest.mock import MagicMock, patch
-from scripts.configure_sphere_collision import _SpheresGui, BallparkConfig, SpherePreset
+
+import numpy as np  # noqa: E402
+from unittest.mock import MagicMock, patch  # noqa: E402
+from scripts.configure_sphere_collision import _SpheresGui, BallparkConfig, SpherePreset  # noqa: E402
 
 
 @pytest.fixture

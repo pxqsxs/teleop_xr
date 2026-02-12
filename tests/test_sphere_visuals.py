@@ -2,11 +2,11 @@ import pytest
 
 pytest.importorskip("ballpark")
 pytest.importorskip("viser")
-import pytest
-from unittest.mock import MagicMock
-import numpy as np
-from scripts.configure_sphere_collision import _SphereVisuals, SPHERE_COLORS
-from ballpark import RobotSpheresResult, Sphere
+
+from unittest.mock import MagicMock  # noqa: E402
+import numpy as np  # noqa: E402
+from scripts.configure_sphere_collision import _SphereVisuals, SPHERE_COLORS  # noqa: E402
+from ballpark import RobotSpheresResult, Sphere  # noqa: E402
 
 
 @pytest.fixture

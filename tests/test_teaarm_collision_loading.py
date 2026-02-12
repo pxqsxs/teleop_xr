@@ -2,9 +2,7 @@ import pytest
 
 pytest.importorskip("yourdfpy")
 pytest.importorskip("pyroki")
-import pytest
 
-pytest.importorskip("pyroki")
 import json  # noqa: E402
 import os  # noqa: E402
 from unittest.mock import patch, mock_open  # noqa: E402
