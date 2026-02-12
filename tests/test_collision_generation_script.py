@@ -1,3 +1,7 @@
+import pytest
+
+pytest.importorskip("yourdfpy")
+pytest.importorskip("ballpark")
 import io
 import pytest
 import yourdfpy

@@ -3,6 +3,8 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
+
+pytest.importorskip("git")
 import git
 from teleop_xr import ram
 

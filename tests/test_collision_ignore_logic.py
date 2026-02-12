@@ -1,6 +1,7 @@
 import pytest
 
 pk = pytest.importorskip("pyroki")
+pytest.importorskip("yourdfpy")
 import yourdfpy  # noqa: E402
 import io  # noqa: E402
 

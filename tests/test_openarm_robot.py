@@ -1,5 +1,9 @@
 import pytest
 
+pytest.importorskip("jaxls")
+pytest.importorskip("pyroki")
+import pytest
+
 pytest.importorskip("pyroki")
 from unittest.mock import patch  # noqa: E402
 import jax  # noqa: E402

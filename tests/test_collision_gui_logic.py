@@ -1,3 +1,7 @@
+import pytest
+
+pytest.importorskip("viser")
+pytest.importorskip("ballpark")
 import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch

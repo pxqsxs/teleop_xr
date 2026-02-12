@@ -1,4 +1,7 @@
 import pytest
+
+pytest.importorskip("git")
+import pytest
 from teleop_xr import ram
 
 

@@ -1,4 +1,8 @@
 import pytest
+
+pytest.importorskip("ballpark")
+pytest.importorskip("viser")
+import pytest
 from unittest.mock import MagicMock
 import numpy as np
 from scripts.configure_sphere_collision import _SphereVisuals, SPHERE_COLORS

@@ -1,5 +1,9 @@
 import pytest
 
+pytest.importorskip("jaxls")
+pytest.importorskip("pyroki")
+import pytest
+
 pytest.importorskip("pyroki")
 
 import jaxlie  # noqa: E402

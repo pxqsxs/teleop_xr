@@ -1,5 +1,9 @@
 import pytest
 
+pytest.importorskip("jaxls")
+pytest.importorskip("pyroki")
+import pytest
+
 pytest.importorskip("pyroki")
 from typing import Any, cast  # noqa: E402
 

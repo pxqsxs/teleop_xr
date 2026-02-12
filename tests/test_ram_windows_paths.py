@@ -1,3 +1,6 @@
+import pytest
+
+pytest.importorskip("git")
 from pathlib import Path, PureWindowsPath
 from unittest.mock import patch, MagicMock
 import pytest
