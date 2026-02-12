@@ -3,19 +3,21 @@ import json
 import time
 import sys
 import asyncio
-from typing import Any, Dict, Optional
-from dataclasses import asdict
+from typing import Any, Dict, List, Optional, Literal
+from dataclasses import dataclass, field, asdict
 import cv2
 import numpy as np
+import tyro
 import jax
 from loguru import logger
 from teleop_xr import Teleop
 from teleop_xr.video_stream import ExternalVideoSource
-from teleop_xr.config import TeleopSettings
+from teleop_xr.config import TeleopSettings, InputMode
+from teleop_xr.common_cli import CommonCLI
 from teleop_xr.messages import XRState
 from teleop_xr.events import EventProcessor, EventSettings, ButtonEvent, XRButton
 from teleop_xr.ik.robot import BaseRobot
-from teleop_xr.ik.loader import load_robot_class
+from teleop_xr.ik.loader import load_robot_class, list_available_robots
 from teleop_xr.ik.solver import PyrokiSolver
 from teleop_xr.ik.controller import IKController
 import transforms3d as t3d
@@ -233,102 +235,111 @@ def build_joy(gamepad):
     return (buttons, axes), touched
 
 
-class TeleopNode(Node):
-    def __init__(self):
-        super().__init__("teleop")
+@dataclass
+class Ros2CLI(CommonCLI):
+    mode: Literal["teleop", "ik"] = "teleop"
+    """Operation mode: 'teleop' for standard ROS2 streaming, 'ik' for IK-based control."""
 
-        # Declare Parameters
-        self.declare_parameter("mode", "teleop")
-        self.declare_parameter("host", "0.0.0.0")
-        self.declare_parameter("port", 4443)
-        self.declare_parameter("input_mode", "controller")
-        self.declare_parameter("head_topic", "")
-        self.declare_parameter("wrist_left_topic", "")
-        self.declare_parameter("wrist_right_topic", "")
-        self.declare_parameter("extra_streams_json", "{}")
-        self.declare_parameter("frame_id", "xr_local")
-        self.declare_parameter("publish_hand_tf", False)
-        self.declare_parameter("robot_class", "")
-        self.declare_parameter("robot_args_json", "{}")
-        self.declare_parameter("urdf_topic", "/robot_description")
-        self.declare_parameter("urdf_timeout", 5.0)
-        self.declare_parameter("no_urdf_topic", False)
+    # Explicit topics
+    head_topic: Optional[str] = None
+    wrist_left_topic: Optional[str] = None
+    wrist_right_topic: Optional[str] = None
+
+    # Custom streams
+    extra_streams: Dict[str, str] = field(default_factory=dict)
+
+    frame_id: str = "xr_local"
+    publish_hand_tf: bool = False
+
+    # Robot Loader args
+    robot_class: Optional[str] = None
+    """Robot class to load (e.g., 'teleop_xr.ik.robots.h1_2:UnitreeH1Robot' or entry point name)."""
+    robot_args: str = "{}"
+    """JSON string of arguments to pass to the robot constructor."""
+    list_robots: bool = False
+    """List available robots and exit."""
+    urdf_topic: str = "/robot_description"
+    """Topic to fetch URDF from."""
+    urdf_timeout: float = 5.0
+    """Timeout for fetching URDF in seconds."""
+    no_urdf_topic: bool = False
+    """Disable fetching URDF from topic."""
+
+    # ROS args (passed as remainder, but Tyro can capture list if explicit)
+    # We will use this to pass args to rclpy
+    ros_args: List[str] = field(default_factory=list)
+
+
+class TeleopNode(Node):
+    def __init__(self, cli: Ros2CLI):
+        super().__init__("teleop")
+        self.cli = cli
 
     @property
     def mode(self) -> str:
-        return self.get_parameter("mode").get_parameter_value().string_value
+        return self.cli.mode
 
     @property
     def host(self) -> str:
-        return self.get_parameter("host").get_parameter_value().string_value
+        return self.cli.host
 
     @property
     def port(self) -> int:
-        return self.get_parameter("port").get_parameter_value().integer_value
+        return self.cli.port
 
     @property
-    def input_mode(self) -> str:
-        return self.get_parameter("input_mode").get_parameter_value().string_value
+    def input_mode(self) -> InputMode:
+        return self.cli.input_mode
 
     @property
     def head_topic(self) -> str:
-        return self.get_parameter("head_topic").get_parameter_value().string_value
+        return self.cli.head_topic or ""
 
     @property
     def wrist_left_topic(self) -> str:
-        return self.get_parameter("wrist_left_topic").get_parameter_value().string_value
+        return self.cli.wrist_left_topic or ""
 
     @property
     def wrist_right_topic(self) -> str:
-        return (
-            self.get_parameter("wrist_right_topic").get_parameter_value().string_value
-        )
+        return self.cli.wrist_right_topic or ""
 
     @property
     def extra_streams(self) -> Dict[str, str]:
-        json_str = (
-            self.get_parameter("extra_streams_json").get_parameter_value().string_value
-        )
-        try:
-            return json.loads(json_str)
-        except json.JSONDecodeError:
-            self.get_logger().error(f"Failed to parse extra_streams_json: {json_str}")
-            return {}
+        return self.cli.extra_streams
 
     @property
     def frame_id(self) -> str:
-        return self.get_parameter("frame_id").get_parameter_value().string_value
+        return self.cli.frame_id
 
     @property
     def publish_hand_tf(self) -> bool:
-        return self.get_parameter("publish_hand_tf").get_parameter_value().bool_value
+        return self.cli.publish_hand_tf
 
     @property
     def robot_class(self) -> str:
-        return self.get_parameter("robot_class").get_parameter_value().string_value
+        return self.cli.robot_class or ""
 
     @property
     def robot_args(self) -> Dict[str, Any]:
-        json_str = (
-            self.get_parameter("robot_args_json").get_parameter_value().string_value
-        )
         try:
-            return json.loads(json_str)
+            return json.loads(self.cli.robot_args)
         except json.JSONDecodeError:
-            self.get_logger().error(f"Failed to parse robot_args_json: {json_str}")
+            self.get_logger().error(
+                f"Failed to parse robot_args: {self.cli.robot_args}"
+            )
             return {}
 
     @property
     def urdf_topic(self) -> str:
-        return self.get_parameter("urdf_topic").get_parameter_value().string_value
+        return self.cli.urdf_topic
 
     @property
     def urdf_timeout(self) -> float:
-        return self.get_parameter("urdf_timeout").get_parameter_value().double_value
+        return self.cli.urdf_timeout
 
     @property
     def no_urdf_topic(self) -> bool:
-        return self.get_parameter("no_urdf_topic").get_parameter_value().bool_value
+        return self.cli.no_urdf_topic
 
 
 class IKWorker(threading.Thread):
@@ -430,10 +441,20 @@ class IKWorker(threading.Thread):
 
 def main():
     jax.config.update("jax_platform_name", "cpu")
+    cli = tyro.cli(Ros2CLI)
+
+    if cli.list_robots:
+        robots = list_available_robots()
+        logger.info("Available robots (via entry points):")
+        if not robots:
+            logger.info("  None")
+        for name, path in robots.items():
+            logger.info(f"  {name}: {path}")
+        return
 
     # 1. Initialize ROS2
-    rclpy.init(args=sys.argv)
-    node = TeleopNode()
+    rclpy.init(args=["--ros-args"] + cli.ros_args)
+    node = TeleopNode(cli)
 
     # 2. Remove Loguru's default handler
     logger.remove()
