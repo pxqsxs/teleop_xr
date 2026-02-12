@@ -4,9 +4,12 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-pytest.importorskip("git")
-import git
-from teleop_xr import ram
+try:
+    import git  # noqa: F401
+except ImportError:
+    pytest.skip("git not installed", allow_module_level=True)
+
+from teleop_xr import ram  # noqa: E402
 
 
 @pytest.fixture
@@ -41,8 +44,11 @@ def temp_git_repo():
 
         # Initialize git repo
         repo = git.Repo.init(repo_path)
-        repo.index.add(["robot.urdf", "robot.xacro", "meshes/base.stl"])
-        repo.index.commit("Initial commit")
+        try:
+            repo.index.add(["robot.urdf", "robot.xacro", "meshes/base.stl"])
+            repo.index.commit("Initial commit")
+        finally:
+            repo.close()
 
         yield repo_path
 
@@ -81,8 +87,11 @@ def test_package_path_replacement(temp_git_repo, mock_cache_dir):
 </robot>"""
     (repo_path / "robot_pkg.urdf").write_text(urdf_content)
     repo = git.Repo(repo_path)
-    repo.index.add(["robot_pkg.urdf"])
-    repo.index.commit("Add pkg urdf")
+    try:
+        repo.index.add(["robot_pkg.urdf"])
+        repo.index.commit("Add pkg urdf")
+    finally:
+        repo.close()
 
     repo_url = f"file://{repo_path}"
     asset_path = ram.get_resource(
@@ -142,8 +151,11 @@ def test_update_existing_repo(temp_git_repo, mock_cache_dir):
     new_file = temp_git_repo / "new_file.txt"
     new_file.write_text("new content")
     repo = git.Repo(temp_git_repo)
-    repo.index.add(["new_file.txt"])
-    repo.index.commit("Add new file")
+    try:
+        repo.index.add(["new_file.txt"])
+        repo.index.commit("Add new file")
+    finally:
+        repo.close()
 
     # Second fetch should update
     repo_dir2 = ram.get_repo(repo_url, cache_dir=mock_cache_dir)
@@ -155,18 +167,20 @@ def test_update_with_branch(temp_git_repo, mock_cache_dir):
     """Test updating an existing repo with a specific branch."""
     repo_url = f"file://{temp_git_repo}"
     repo = git.Repo(temp_git_repo)
+    try:
+        # Identify default branch (master or main)
+        default_branch = repo.active_branch.name
 
-    # Identify default branch (master or main)
-    default_branch = repo.active_branch.name
-
-    # Create a new branch
-    repo.create_head("feature")
-    repo.git.checkout("feature")
-    feature_file = temp_git_repo / "feature.txt"
-    feature_file.write_text("feature content")
-    repo.index.add(["feature.txt"])
-    repo.index.commit("Add feature file")
-    repo.git.checkout(default_branch)  # Switch back to default
+        # Create a new branch
+        repo.create_head("feature")
+        repo.git.checkout("feature")
+        feature_file = temp_git_repo / "feature.txt"
+        feature_file.write_text("feature content")
+        repo.index.add(["feature.txt"])
+        repo.index.commit("Add feature file")
+        repo.git.checkout(default_branch)  # Switch back to default
+    finally:
+        repo.close()
 
     # Fetch default branch
     ram.get_repo(repo_url, branch=default_branch, cache_dir=mock_cache_dir)
@@ -217,8 +231,11 @@ def test_checkout_new_remote_branch(temp_git_repo, mock_cache_dir):
 
     # 2. Create a new branch in the SOURCE repo
     repo = git.Repo(temp_git_repo)
-    new_branch_name = "new-remote-branch"
-    repo.create_head(new_branch_name)
+    try:
+        new_branch_name = "new-remote-branch"
+        repo.create_head(new_branch_name)
+    finally:
+        repo.close()
 
     # 3. Fetch the new branch.
     # Local cache repo doesn't know about it yet, so initial checkout fails.
@@ -228,7 +245,10 @@ def test_checkout_new_remote_branch(temp_git_repo, mock_cache_dir):
 
     # Verify we are on the correct branch
     cache_repo = git.Repo(repo_dir)
-    assert cache_repo.active_branch.name == new_branch_name
+    try:
+        assert cache_repo.active_branch.name == new_branch_name
+    finally:
+        cache_repo.close()
 
 
 def test_resolve_package_in_repo(temp_git_repo, monkeypatch):
@@ -267,8 +287,11 @@ def test_get_resource_no_resolve_packages(temp_git_repo, mock_cache_dir):
         '<mesh filename="package://my_pkg/mesh.stl"/>'
     )
     repo = git.Repo(temp_git_repo)
-    repo.index.add(["pkg.urdf"])
-    repo.index.commit("Add pkg urdf")
+    try:
+        repo.index.add(["pkg.urdf"])
+        repo.index.commit("Add pkg urdf")
+    finally:
+        repo.close()
 
     # Fetch without resolution
     path = ram.get_resource(

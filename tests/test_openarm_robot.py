@@ -1,10 +1,11 @@
 import pytest
 
-pytest.importorskip("jaxls")
-pytest.importorskip("pyroki")
-import pytest
+try:
+    import jaxls  # noqa: F401
+    import pyroki  # noqa: F401
+except ImportError:
+    pytest.skip("jaxls or pyroki not installed", allow_module_level=True)
 
-pytest.importorskip("pyroki")
 from unittest.mock import patch  # noqa: E402
 import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402

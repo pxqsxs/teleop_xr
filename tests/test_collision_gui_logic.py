@@ -1,7 +1,10 @@
 import pytest
 
-pytest.importorskip("viser")
-pytest.importorskip("ballpark")
+try:
+    import viser  # noqa: F401
+    import ballpark  # noqa: F401
+except ImportError:
+    pytest.skip("viser or ballpark not installed", allow_module_level=True)
 
 import numpy as np  # noqa: E402
 from unittest.mock import MagicMock, patch  # noqa: E402

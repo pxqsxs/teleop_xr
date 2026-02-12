@@ -1,8 +1,11 @@
 import pytest
 
-pytest.importorskip("git")
-import pytest
-from teleop_xr import ram
+try:
+    import git  # noqa: F401
+except ImportError:
+    pytest.skip("git not installed", allow_module_level=True)
+
+from teleop_xr import ram  # noqa: E402
 
 
 @pytest.fixture

@@ -1,13 +1,17 @@
 import pytest
 
-pytest.importorskip("git")
-from pathlib import Path, PureWindowsPath
-from unittest.mock import patch, MagicMock
-import pytest
-from teleop_xr import ram
-from teleop_xr.robot_vis import RobotVisModule
-from teleop_xr.config import RobotVisConfig
-from fastapi import FastAPI
+try:
+    import git  # noqa: F401
+except ImportError:
+    pytest.skip("git not installed", allow_module_level=True)
+
+from pathlib import Path, PureWindowsPath  # noqa: E402
+from unittest.mock import patch, MagicMock  # noqa: E402
+import pytest  # noqa: E402
+from teleop_xr import ram  # noqa: E402
+from teleop_xr.robot_vis import RobotVisModule  # noqa: E402
+from teleop_xr.config import RobotVisConfig  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
 
 
 def test_replace_package_uris_uses_forward_slashes():

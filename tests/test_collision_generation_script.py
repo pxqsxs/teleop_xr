@@ -1,7 +1,10 @@
 import pytest
 
-pytest.importorskip("yourdfpy")
-pytest.importorskip("ballpark")
+try:
+    import yourdfpy  # noqa: F401
+    import ballpark  # noqa: F401
+except ImportError:
+    pytest.skip("yourdfpy or ballpark not installed", allow_module_level=True)
 
 import io  # noqa: E402
 import yourdfpy  # noqa: E402

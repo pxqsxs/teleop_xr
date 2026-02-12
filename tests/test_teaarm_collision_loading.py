@@ -1,7 +1,10 @@
 import pytest
 
-pytest.importorskip("yourdfpy")
-pytest.importorskip("pyroki")
+try:
+    import yourdfpy  # noqa: F401
+    import pyroki  # noqa: F401
+except ImportError:
+    pytest.skip("yourdfpy or pyroki not installed", allow_module_level=True)
 
 import json  # noqa: E402
 import os  # noqa: E402

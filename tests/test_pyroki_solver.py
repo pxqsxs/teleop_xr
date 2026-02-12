@@ -1,10 +1,11 @@
 import pytest
 
-pytest.importorskip("jaxls")
-pytest.importorskip("pyroki")
-import pytest
+try:
+    import jaxls  # noqa: F401
+    import pyroki  # noqa: F401
+except ImportError:
+    pytest.skip("jaxls or pyroki not installed", allow_module_level=True)
 
-pytest.importorskip("pyroki")
 from typing import Any, cast  # noqa: E402
 
 from teleop_xr.ik.solver import PyrokiSolver  # noqa: E402

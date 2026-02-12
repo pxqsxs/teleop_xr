@@ -178,19 +178,23 @@ def get_repo(
     with FileLock(lock_path):
         if not repo_dir.exists():
             # Clone repo
-            git.Repo.clone_from(repo_url, repo_dir, branch=branch)
+            repo = git.Repo.clone_from(repo_url, repo_dir, branch=branch)
+            repo.close()
         else:
             # Update repo
             repo = git.Repo(repo_dir)
-            if branch:
-                try:
-                    repo.git.checkout(branch)
-                except git.GitCommandError:
-                    # If checkout fails, try fetching first
-                    repo.remotes.origin.fetch()
-                    repo.git.checkout(branch)
+            try:
+                if branch:
+                    try:
+                        repo.git.checkout(branch)
+                    except git.GitCommandError:
+                        # If checkout fails, try fetching first
+                        repo.remotes.origin.fetch()
+                        repo.git.checkout(branch)
 
-            repo.remotes.origin.pull()
+                repo.remotes.origin.pull()
+            finally:
+                repo.close()
 
     return repo_dir
 

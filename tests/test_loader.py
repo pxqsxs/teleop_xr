@@ -1,10 +1,11 @@
 import pytest
 
-pytest.importorskip("jaxls")
-pytest.importorskip("pyroki")
-import pytest
+try:
+    import jaxls  # noqa: F401
+    import pyroki  # noqa: F401
+except ImportError:
+    pytest.skip("jaxls or pyroki not installed", allow_module_level=True)
 
-pytest.importorskip("pyroki")
 from teleop_xr.ik.loader import load_robot_class, list_available_robots, RobotLoadError  # noqa: E402
 from teleop_xr.ik.robots.h1_2 import UnitreeH1Robot  # noqa: E402
 
