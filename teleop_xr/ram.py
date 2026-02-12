@@ -4,6 +4,7 @@ Handles fetching and processing robot descriptions (URDF/Xacro) from git.
 """
 
 import hashlib
+import os
 import re
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -328,6 +329,81 @@ def get_resource(
             output_urdf_path = file_path
 
     return output_urdf_path
+
+
+def from_string(
+    urdf_content: str, cache_dir: Optional[Path] = None
+) -> tuple[Path, Optional[str]]:
+    """
+    Save URDF content to a hash-named file, resolve package:// URIs,
+    and auto-detect mesh_path.
+    """
+    if cache_dir is None:
+        cache_dir = get_cache_root()
+    else:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+    content_hash = hashlib.sha256(urdf_content.encode()).hexdigest()[:12]
+    output_dir = cache_dir / "processed"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_urdf_path = output_dir / f"string_{content_hash}.urdf"
+
+    all_mesh_paths = []
+
+    def resolve_uri(match):
+        pkg_name = match.group(1)
+        sub_path = match.group(2)
+
+        pkg_path = None
+        # 1. Try RAM internal resolver if context is set
+        if _CURRENT_REPO_ROOT:
+            try:
+                pkg_path = _resolve_package(pkg_name)
+            except ValueError:
+                pass
+
+        # 2. Try ament_index_python
+        if pkg_path is None:
+            try:
+                from ament_index_python.get_package_share_directory import (
+                    get_package_share_directory,
+                )
+
+                pkg_path = get_package_share_directory(pkg_name)
+            except (ImportError, Exception):
+                pass
+
+        if pkg_path:
+            abs_path = str((Path(pkg_path) / sub_path).absolute())
+            all_mesh_paths.append(abs_path)
+            return abs_path
+
+        return match.group(0)
+
+    # We use a slightly more restrictive regex for sub_path to avoid greedy matching
+    # into other URDF attributes, but we stay close to the original pattern.
+    resolved_content = re.sub(
+        r"package://([^/]+)/([^\"<\s]*)", resolve_uri, urdf_content
+    )
+
+    # Collect other absolute paths already in URDF
+    for match in re.finditer(r'filename="([^"]+)"', resolved_content):
+        p = match.group(1)
+        if Path(p).is_absolute() and p not in all_mesh_paths:
+            all_mesh_paths.append(p)
+
+    mesh_path = None
+    if all_mesh_paths:
+        try:
+            mesh_dirs = [os.path.dirname(p) for p in all_mesh_paths]
+            cp = os.path.commonpath(mesh_dirs)
+            if cp not in ["/", "/opt", "/usr", "/home"]:
+                mesh_path = cp
+        except ValueError:
+            pass
+
+    output_urdf_path.write_text(resolved_content)
+    return output_urdf_path, mesh_path
 
 
 # Alias get_asset to get_resource for backward compatibility if any

@@ -2,17 +2,15 @@ import threading
 import json
 import time
 import sys
-from typing import Any, Dict, List, Optional, Literal
-from dataclasses import dataclass, field, asdict
+from typing import Any, Dict, Optional
+from dataclasses import asdict
 import cv2
 import numpy as np
-import tyro
 import jax
 from loguru import logger
 from teleop_xr import Teleop
 from teleop_xr.video_stream import ExternalVideoSource
 from teleop_xr.config import TeleopSettings
-from teleop_xr.common_cli import CommonCLI
 from teleop_xr.messages import XRState
 from teleop_xr.events import EventProcessor, EventSettings, ButtonEvent, XRButton
 from teleop_xr.ik.robot import BaseRobot
@@ -234,39 +232,102 @@ def build_joy(gamepad):
     return (buttons, axes), touched
 
 
-@dataclass
-class Ros2CLI(CommonCLI):
-    mode: Literal["teleop", "ik"] = "teleop"
-    """Operation mode: 'teleop' for standard ROS2 streaming, 'ik' for IK-based control."""
+class TeleopNode(Node):
+    def __init__(self):
+        super().__init__("teleop")
 
-    # Explicit topics
-    head_topic: Optional[str] = None
-    wrist_left_topic: Optional[str] = None
-    wrist_right_topic: Optional[str] = None
+        # Declare Parameters
+        self.declare_parameter("mode", "teleop")
+        self.declare_parameter("host", "0.0.0.0")
+        self.declare_parameter("port", 4443)
+        self.declare_parameter("input_mode", "controller")
+        self.declare_parameter("head_topic", "")
+        self.declare_parameter("wrist_left_topic", "")
+        self.declare_parameter("wrist_right_topic", "")
+        self.declare_parameter("extra_streams_json", "{}")
+        self.declare_parameter("frame_id", "xr_local")
+        self.declare_parameter("publish_hand_tf", False)
+        self.declare_parameter("robot_class", "")
+        self.declare_parameter("robot_args_json", "{}")
+        self.declare_parameter("urdf_topic", "/robot_description")
+        self.declare_parameter("urdf_timeout", 5.0)
+        self.declare_parameter("no_urdf_topic", False)
 
-    # Custom streams
-    extra_streams: Dict[str, str] = field(default_factory=dict)
+    @property
+    def mode(self) -> str:
+        return self.get_parameter("mode").get_parameter_value().string_value
 
-    frame_id: str = "xr_local"
-    publish_hand_tf: bool = False
+    @property
+    def host(self) -> str:
+        return self.get_parameter("host").get_parameter_value().string_value
 
-    # Robot Loader args
-    robot_class: Optional[str] = None
-    """Robot class to load (e.g., 'teleop_xr.ik.robots.h1_2:UnitreeH1Robot' or entry point name)."""
-    robot_args: str = "{}"
-    """JSON string of arguments to pass to the robot constructor."""
-    list_robots: bool = False
-    """List available robots and exit."""
-    urdf_topic: str = "/robot_description"
-    """Topic to fetch URDF from."""
-    urdf_timeout: float = 5.0
-    """Timeout for fetching URDF in seconds."""
-    no_urdf_topic: bool = False
-    """Disable fetching URDF from topic."""
+    @property
+    def port(self) -> int:
+        return self.get_parameter("port").get_parameter_value().integer_value
 
-    # ROS args (passed as remainder, but Tyro can capture list if explicit)
-    # We will use this to pass args to rclpy
-    ros_args: List[str] = field(default_factory=list)
+    @property
+    def input_mode(self) -> str:
+        return self.get_parameter("input_mode").get_parameter_value().string_value
+
+    @property
+    def head_topic(self) -> str:
+        return self.get_parameter("head_topic").get_parameter_value().string_value
+
+    @property
+    def wrist_left_topic(self) -> str:
+        return self.get_parameter("wrist_left_topic").get_parameter_value().string_value
+
+    @property
+    def wrist_right_topic(self) -> str:
+        return (
+            self.get_parameter("wrist_right_topic").get_parameter_value().string_value
+        )
+
+    @property
+    def extra_streams(self) -> Dict[str, str]:
+        json_str = (
+            self.get_parameter("extra_streams_json").get_parameter_value().string_value
+        )
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            self.get_logger().error(f"Failed to parse extra_streams_json: {json_str}")
+            return {}
+
+    @property
+    def frame_id(self) -> str:
+        return self.get_parameter("frame_id").get_parameter_value().string_value
+
+    @property
+    def publish_hand_tf(self) -> bool:
+        return self.get_parameter("publish_hand_tf").get_parameter_value().bool_value
+
+    @property
+    def robot_class(self) -> str:
+        return self.get_parameter("robot_class").get_parameter_value().string_value
+
+    @property
+    def robot_args(self) -> Dict[str, Any]:
+        json_str = (
+            self.get_parameter("robot_args_json").get_parameter_value().string_value
+        )
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            self.get_logger().error(f"Failed to parse robot_args_json: {json_str}")
+            return {}
+
+    @property
+    def urdf_topic(self) -> str:
+        return self.get_parameter("urdf_topic").get_parameter_value().string_value
+
+    @property
+    def urdf_timeout(self) -> float:
+        return self.get_parameter("urdf_timeout").get_parameter_value().double_value
+
+    @property
+    def no_urdf_topic(self) -> bool:
+        return self.get_parameter("no_urdf_topic").get_parameter_value().bool_value
 
 
 class IKWorker(threading.Thread):
@@ -349,9 +410,9 @@ class IKWorker(threading.Thread):
 
 def main():
     jax.config.update("jax_platform_name", "cpu")
-    cli = tyro.cli(Ros2CLI)
 
-    if cli.list_robots:
+    # 0. Handle CLI flags that are not ROS parameters
+    if "--list-robots" in sys.argv:
         robots = list_available_robots()
         logger.info("Available robots (via entry points):")
         if not robots:
@@ -360,17 +421,18 @@ def main():
             logger.info(f"  {name}: {path}")
         return
 
-    rclpy.init(args=["--ros-args"] + cli.ros_args)
-    node = rclpy.create_node("teleop")
+    # 1. Initialize ROS2
+    rclpy.init(args=sys.argv)
+    node = TeleopNode()
 
-    # 1. Remove Loguru's default handler
+    # 2. Remove Loguru's default handler
     logger.remove()
 
-    # 2. Add the ROS 2 bridge as a sink
+    # 3. Add the ROS 2 bridge as a sink
     bridge = RosBridgeHandler(node)
     logger.add(bridge.write, format="{message}", level="INFO")
 
-    # 3. Add back a styled console sink for local output
+    # 4. Add back a styled console sink for local output
     logger.add(
         sys.stderr,
         colorize=True,
@@ -389,13 +451,13 @@ def main():
         "xr_state": None,
     }
 
-    if cli.mode == "ik":
-        robot_cls = load_robot_class(cli.robot_class)
-        robot_args = json.loads(cli.robot_args)
+    if node.mode == "ik":
+        robot_cls = load_robot_class(node.robot_class)
+        robot_args = node.robot_args
 
         urdf_string = None
-        if not cli.no_urdf_topic:
-            urdf_string = get_urdf_from_topic(node, cli.urdf_topic, cli.urdf_timeout)
+        if not node.no_urdf_topic:
+            urdf_string = get_urdf_from_topic(node, node.urdf_topic, node.urdf_timeout)
 
         if urdf_string:
             robot_args["urdf_string"] = urdf_string
@@ -431,13 +493,13 @@ def main():
 
     # Merge topics
     topics = {}
-    if cli.head_topic:
-        topics["head"] = cli.head_topic
-    if cli.wrist_left_topic:
-        topics["wrist_left"] = cli.wrist_left_topic
-    if cli.wrist_right_topic:
-        topics["wrist_right"] = cli.wrist_right_topic
-    topics.update(cli.extra_streams)
+    if node.head_topic:
+        topics["head"] = node.head_topic
+    if node.wrist_left_topic:
+        topics["wrist_left"] = node.wrist_left_topic
+    if node.wrist_right_topic:
+        topics["wrist_right"] = node.wrist_right_topic
+    topics.update(node.extra_streams)
 
     video_sources = {}
     for key, topic in topics.items():
@@ -449,13 +511,13 @@ def main():
     camera_views = {k: {"device": topic} for k, topic in topics.items()}
 
     robot_vis = None
-    if cli.mode == "ik" and robot:
+    if node.mode == "ik" and robot:
         robot_vis = robot.get_vis_config()
 
     settings = TeleopSettings(
-        host=cli.host,
-        port=cli.port,
-        input_mode=cli.input_mode,
+        host=node.host,
+        port=node.port,
+        input_mode=node.input_mode,
         camera_views=camera_views,
         robot_vis=robot_vis,
     )
@@ -481,13 +543,13 @@ def main():
             return
         msg = PoseStamped()
         msg.header.stamp = stamp
-        msg.header.frame_id = cli.frame_id
+        msg.header.frame_id = node.frame_id
         msg.pose = matrix_to_pose_msg(mat)
         get_publisher(PoseStamped, topic).publish(msg)
 
         tf = TransformStamped()
         tf.header.stamp = tf_stamp  # Use PC timestamp for TF
-        tf.header.frame_id = cli.frame_id
+        tf.header.frame_id = node.frame_id
         tf.child_frame_id = child_frame_id
         tf.transform.translation.x = msg.pose.position.x
         tf.transform.translation.y = msg.pose.position.y
@@ -499,7 +561,7 @@ def main():
         buttons, axes = joy_data
         msg = Joy()
         msg.header.stamp = stamp
-        msg.header.frame_id = cli.frame_id
+        msg.header.frame_id = node.frame_id
         msg.buttons = buttons
         msg.axes = axes
         get_publisher(Joy, topic).publish(msg)
@@ -512,7 +574,7 @@ def main():
 
         pose_array = PoseArray()
         pose_array.header.stamp = stamp
-        pose_array.header.frame_id = cli.frame_id
+        pose_array.header.frame_id = node.frame_id
 
         for joint_name in XR_HAND_JOINTS:
             joint_pose_dict = joints_dict.get(joint_name)
@@ -522,10 +584,10 @@ def main():
             pose_msg = matrix_to_pose_msg(mat)
             pose_array.poses.append(pose_msg)
 
-            if cli.publish_hand_tf:
+            if node.publish_hand_tf:
                 tf = TransformStamped()
                 tf.header.stamp = stamp
-                tf.header.frame_id = cli.frame_id
+                tf.header.frame_id = node.frame_id
                 tf.child_frame_id = f"xr/hand_{handed}/{joint_name}"
                 tf.transform.translation.x = pose_msg.position.x
                 tf.transform.translation.y = pose_msg.position.y
@@ -546,7 +608,7 @@ def main():
                 event.type == ButtonEventType.DOUBLE_PRESS
                 and event.button == XRButton.SQUEEZE
             ):
-                if cli.mode == "ik" and robot and ik_worker and controller:
+                if node.mode == "ik" and robot and ik_worker and controller:
                     default_q = np.array(robot.get_default_config())
                     state_container["q"] = default_q
                     controller.reset()
