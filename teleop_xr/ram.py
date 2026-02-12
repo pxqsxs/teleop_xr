@@ -113,10 +113,10 @@ def _replace_package_uris(urdf_content: str, repo_root: Path) -> str:
         # Try to resolve package path first
         try:
             pkg_path = Path(_resolve_package(match.group(1)))
-            return str((pkg_path / sub_path).absolute())
+            return (pkg_path / sub_path).resolve().as_posix()
         except ValueError:
             # Fallback to simple root join if resolution fails
-            return str((repo_root / sub_path).absolute())
+            return (repo_root / sub_path).resolve().as_posix()
 
     return re.sub(r"package://([^/]+)/(.*)", resolve_uri, urdf_content)
 
@@ -152,9 +152,9 @@ def _replace_dae_with_glb(urdf_content: str) -> str:
         if original_path.suffix.lower() == ".dae" and original_path.exists():
             glb_path = _convert_dae_to_glb(original_path)
             if glb_path != original_path:
-                return f'filename="{glb_path}"'
+                return f'filename="{glb_path.as_posix()}"'
 
-        return f'filename="{original_path_str}"'
+        return f'filename="{Path(original_path_str).as_posix()}"'
 
     return re.sub(r'filename="([^"]+)"', replace_match, urdf_content)
 
