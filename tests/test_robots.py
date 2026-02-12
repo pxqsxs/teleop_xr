@@ -1,12 +1,12 @@
 import pytest
 
 pytest.importorskip("pyroki")
-import jax.numpy as jnp
-import jaxlie
-from unittest.mock import patch
-from teleop_xr.ik.robot import BaseRobot
-from teleop_xr.ik.robots.teaarm import TeaArmRobot
-from teleop_xr.ik.robots.h1_2 import UnitreeH1Robot
+import jax.numpy as jnp  # noqa: E402
+import jaxlie  # noqa: E402
+from unittest.mock import patch  # noqa: E402
+from teleop_xr.ik.robot import BaseRobot  # noqa: E402
+from teleop_xr.ik.robots.teaarm import TeaArmRobot  # noqa: E402
+from teleop_xr.ik.robots.h1_2 import UnitreeH1Robot  # noqa: E402
 
 TEAARM_URDF = """
 <robot name="teaarm">

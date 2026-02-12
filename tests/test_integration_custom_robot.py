@@ -1,10 +1,11 @@
 import pytest
-import jax.numpy as jnp
-from teleop_xr.ik.robot import BaseRobot
-from teleop_xr.ik.loader import load_robot_class, RobotLoadError
-from teleop_xr.config import RobotVisConfig
 
 pytest.importorskip("pyroki")
+
+import jax.numpy as jnp  # noqa: E402
+from teleop_xr.ik.robot import BaseRobot  # noqa: E402
+from teleop_xr.ik.loader import load_robot_class, RobotLoadError  # noqa: E402
+from teleop_xr.config import RobotVisConfig  # noqa: E402
 
 
 class MockCustomRobot(BaseRobot):

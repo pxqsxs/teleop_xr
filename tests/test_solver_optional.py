@@ -1,9 +1,10 @@
-import jaxlie
 import pytest
 
 pytest.importorskip("pyroki")
-from teleop_xr.ik.solver import PyrokiSolver
-from teleop_xr.ik.robots.h1_2 import UnitreeH1Robot
+
+import jaxlie  # noqa: E402
+from teleop_xr.ik.solver import PyrokiSolver  # noqa: E402
+from teleop_xr.ik.robots.h1_2 import UnitreeH1Robot  # noqa: E402
 
 
 def test_solver_optional_targets():

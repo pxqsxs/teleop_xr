@@ -86,6 +86,7 @@ dev = [
   "mkdocs-material",
   "mkdocstrings[python]",
   "pytest-cov>=6.0.0",
+  "httpx",
 ]
 
 [tool.pytest.ini_options]

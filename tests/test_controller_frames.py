@@ -1,11 +1,15 @@
-import numpy as np
-import jax.numpy as jnp
-import jaxlie
-from loguru import logger
-from unittest.mock import MagicMock
-from teleop_xr.ik.controller import IKController
-from teleop_xr.ik.robot import BaseRobot
-from teleop_xr.messages import (
+import pytest
+
+pytest.importorskip("pyroki")
+
+import numpy as np  # noqa: E402
+import jax.numpy as jnp  # noqa: E402
+import jaxlie  # noqa: E402
+from loguru import logger  # noqa: E402
+from unittest.mock import MagicMock  # noqa: E402
+from teleop_xr.ik.controller import IKController  # noqa: E402
+from teleop_xr.ik.robot import BaseRobot  # noqa: E402
+from teleop_xr.messages import (  # noqa: E402
     XRState,
     XRInputSource,
     XRDeviceRole,
@@ -14,9 +18,6 @@ from teleop_xr.messages import (
     XRGamepad,
     XRButtonState,
 )
-import pytest
-
-pytest.importorskip("pyroki")
 
 
 class MockRobot(BaseRobot):

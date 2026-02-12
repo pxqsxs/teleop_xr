@@ -1,12 +1,12 @@
 import pytest
 
 pytest.importorskip("pyroki")
-from unittest.mock import patch
-import jax
-import jax.numpy as jnp
-import jaxlie
+from unittest.mock import patch  # noqa: E402
+import jax  # noqa: E402
+import jax.numpy as jnp  # noqa: E402
+import jaxlie  # noqa: E402
 
-from teleop_xr.ik.robots.openarm import OpenArmRobot
+from teleop_xr.ik.robots.openarm import OpenArmRobot  # noqa: E402
 
 # Minimal bimanual URDF matching the link/joint naming convention of openarm
 MINIMAL_OPENARM_URDF = """

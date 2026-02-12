@@ -1,12 +1,16 @@
-import numpy as np
-import jax.numpy as jnp
-import jaxlie
-from unittest.mock import patch, PropertyMock
-from loguru import logger
-from teleop_xr.ik.robot import BaseRobot
-from teleop_xr.ik.solver import PyrokiSolver
-from teleop_xr.ik.controller import IKController
-from teleop_xr.messages import (
+import pytest
+
+pytest.importorskip("pyroki")
+
+import numpy as np  # noqa: E402
+import jax.numpy as jnp  # noqa: E402
+import jaxlie  # noqa: E402
+from unittest.mock import patch, PropertyMock  # noqa: E402
+from loguru import logger  # noqa: E402
+from teleop_xr.ik.robot import BaseRobot  # noqa: E402
+from teleop_xr.ik.solver import PyrokiSolver  # noqa: E402
+from teleop_xr.ik.controller import IKController  # noqa: E402
+from teleop_xr.messages import (  # noqa: E402
     XRButtonState,
     XRDeviceRole,
     XRGamepad,
@@ -15,9 +19,6 @@ from teleop_xr.messages import (
     XRPose,
     XRState,
 )
-import pytest
-
-pytest.importorskip("pyroki")
 
 
 class DummyRobot(BaseRobot):

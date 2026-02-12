@@ -1,8 +1,9 @@
-import jaxlie
 import pytest
 
 pytest.importorskip("pyroki")
-from teleop_xr.ik.robots.teaarm import TeaArmRobot
+
+import jaxlie  # noqa: E402
+from teleop_xr.ik.robots.teaarm import TeaArmRobot  # noqa: E402
 
 TEAARM_URDF = """
 <robot name="teaarm">

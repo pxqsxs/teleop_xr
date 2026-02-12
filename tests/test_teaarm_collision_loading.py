@@ -1,10 +1,10 @@
-import json
 import pytest
 
 pytest.importorskip("pyroki")
-import os
-from unittest.mock import patch, mock_open
-from teleop_xr.ik.robots.teaarm import TeaArmRobot
+import json  # noqa: E402
+import os  # noqa: E402
+from unittest.mock import patch, mock_open  # noqa: E402
+from teleop_xr.ik.robots.teaarm import TeaArmRobot  # noqa: E402
 
 TEAARM_URDF = """
 <robot name="teaarm">

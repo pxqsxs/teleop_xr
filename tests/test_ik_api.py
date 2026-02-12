@@ -1,12 +1,12 @@
-import numpy as np
 import pytest
 
 pytest.importorskip("pyroki")
-import jax.numpy as jnp
-import jaxlie
-from abc import ABC
-from typing import Dict, List, Any
-from teleop_xr.ik import BaseRobot, PyrokiSolver, IKController
+import numpy as np  # noqa: E402
+import jax.numpy as jnp  # noqa: E402
+import jaxlie  # noqa: E402
+from abc import ABC  # noqa: E402
+from typing import Dict, List, Any  # noqa: E402
+from teleop_xr.ik import BaseRobot, PyrokiSolver, IKController  # noqa: E402
 
 
 def test_ik_api_imports():
@@ -50,6 +50,7 @@ def test_pyroki_solver_instantiation():
             target_L: jaxlie.SE3 | None,
             target_R: jaxlie.SE3 | None,
             target_Head: jaxlie.SE3 | None,
+            q_current: jnp.ndarray | None = None,
         ) -> List[Any]:
             return []
 
@@ -77,7 +78,7 @@ def test_ik_controller_instantiation():
         def get_default_config(self) -> jnp.ndarray:
             return jnp.zeros(2)
 
-        def build_costs(self, target_L, target_R, target_Head):
+        def build_costs(self, target_L, target_R, target_Head, q_current=None):
             return []
 
         @property
@@ -106,7 +107,7 @@ def test_ik_controller_with_filter():
         def get_default_config(self) -> jnp.ndarray:
             return jnp.zeros(2)
 
-        def build_costs(self, target_L, target_R, target_Head):
+        def build_costs(self, target_L, target_R, target_Head, q_current=None):
             return []
 
         @property

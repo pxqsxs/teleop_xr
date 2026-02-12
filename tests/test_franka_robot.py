@@ -1,14 +1,14 @@
 import pytest
 
 pytest.importorskip("pyroki")
-from unittest.mock import patch
-import jax.numpy as jnp
-import jaxlie
+from unittest.mock import patch  # noqa: E402
+import jax.numpy as jnp  # noqa: E402
+import jaxlie  # noqa: E402
 
 # Mock dependencies before importing FrankaRobot if they do heavy lifting at import time
 # FrankaRobot imports pyroki, yourdfpy, etc.
 
-from teleop_xr.ik.robots.franka import FrankaRobot
+from teleop_xr.ik.robots.franka import FrankaRobot  # noqa: E402
 
 MINIMAL_FRANKA_URDF = """
 <robot name="panda">
