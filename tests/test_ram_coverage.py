@@ -1,5 +1,4 @@
 import sys
-import types
 from unittest.mock import MagicMock
 import pytest
 from teleop_xr import ram
@@ -18,29 +17,19 @@ def test_resolve_package_metapackage_subdir(tmp_path):
 
 def test_resolve_package_ros_env(monkeypatch):
     # Case where package is in ROS 2 env
-    mock_packages = types.ModuleType("ament_index_python.packages")
-    mock_packages.get_package_share_directory = MagicMock(
-        return_value="/opt/ros/share/pkg"
+    # Mocking the internal helper is the most robust way for CI
+    monkeypatch.setattr(
+        ram, "_get_ros_package_share_directory", lambda p: "/opt/ros/share/pkg"
     )
-
-    monkeypatch.setitem(sys.modules, "ament_index_python", MagicMock())
-    monkeypatch.setitem(sys.modules, "ament_index_python.packages", mock_packages)
 
     # Ensure _CURRENT_REPO_ROOT is None
     with ram._ram_repo_context(None):
         assert ram._resolve_package("any_pkg") == "/opt/ros/share/pkg"
-        mock_packages.get_package_share_directory.assert_called_once_with("any_pkg")
 
 
 def test_resolve_package_not_found(monkeypatch):
     # Case where package is NOT found anywhere
-    monkeypatch.setitem(sys.modules, "ament_index_python", MagicMock())
-    mock_packages = types.ModuleType("ament_index_python.packages")
-    # Mock it to raise Exception
-    mock_packages.get_package_share_directory = MagicMock(
-        side_effect=Exception("Not found")
-    )
-    monkeypatch.setitem(sys.modules, "ament_index_python.packages", mock_packages)
+    monkeypatch.setattr(ram, "_get_ros_package_share_directory", lambda p: None)
 
     with ram._ram_repo_context(None):
         with pytest.raises(ValueError, match="not found"):
@@ -90,13 +79,9 @@ def test_from_string_ram_internal_resolve(tmp_path):
 
 def test_from_string_ros_resolve(tmp_path, monkeypatch):
     # Case where from_string uses ROS resolver
-    mock_parent = MagicMock()
-    mock_packages = MagicMock()
-    mock_packages.get_package_share_directory = MagicMock(return_value="/opt/ros/pkg")
-    mock_parent.packages = mock_packages
-
-    monkeypatch.setitem(sys.modules, "ament_index_python", mock_parent)
-    monkeypatch.setitem(sys.modules, "ament_index_python.packages", mock_packages)
+    monkeypatch.setattr(
+        ram, "_get_ros_package_share_directory", lambda p: "/opt/ros/pkg"
+    )
 
     urdf_content = "package://my_pkg/mesh.stl"
 
@@ -134,13 +119,7 @@ def test_from_string_ram_internal_resolve_fail(tmp_path):
 
 def test_from_string_no_pkg_found(tmp_path, monkeypatch):
     # Case where pkg is not found in from_string
-    monkeypatch.setitem(sys.modules, "ament_index_python", MagicMock())
-    mock_packages = types.ModuleType("ament_index_python.packages")
-    # Mock it to raise Exception
-    mock_packages.get_package_share_directory = MagicMock(
-        side_effect=Exception("Not found")
-    )
-    monkeypatch.setitem(sys.modules, "ament_index_python.packages", mock_packages)
+    monkeypatch.setattr(ram, "_get_ros_package_share_directory", lambda p: None)
 
     urdf_content = "package://nonexistent/mesh.stl"
 
@@ -168,3 +147,27 @@ def test_get_resource_urdf_no_resolve_packages_but_glb(tmp_path, monkeypatch):
         convert_dae_to_glb=True,
     )
     mock_replace.assert_called_once()
+
+
+def test_get_ros_package_share_directory_internal_logic(monkeypatch):
+    # Test the real internal logic of the helper by mocking its import
+    mock_packages = MagicMock()
+    mock_packages.get_package_share_directory = MagicMock(return_value="/real/path")
+
+    # We use a nested mock to simulate the import structure
+    mock_parent = MagicMock()
+    mock_parent.packages = mock_packages
+
+    monkeypatch.setitem(sys.modules, "ament_index_python", mock_parent)
+    monkeypatch.setitem(sys.modules, "ament_index_python.packages", mock_packages)
+
+    # This hits the line in helper (return get_package_share_directory)
+    assert ram._get_ros_package_share_directory("pkg") == "/real/path"
+
+
+def test_get_ros_package_share_directory_import_error(monkeypatch):
+    # Test the exception handler in the helper
+    monkeypatch.setitem(sys.modules, "ament_index_python", None)
+    monkeypatch.setitem(sys.modules, "ament_index_python.packages", None)
+
+    assert ram._get_ros_package_share_directory("pkg") is None

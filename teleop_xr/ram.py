@@ -21,6 +21,19 @@ import trimesh
 _CURRENT_REPO_ROOT: Optional[Path] = None
 
 
+def _get_ros_package_share_directory(package_name: str) -> Optional[str]:
+    """
+    Helper to get ROS 2 package share directory.
+    Isolated to allow easier mocking in tests.
+    """
+    try:
+        from ament_index_python.packages import get_package_share_directory
+
+        return get_package_share_directory(package_name)
+    except (ImportError, Exception):
+        return None
+
+
 def _resolve_package(package_name: str) -> str:
     """Resolve a package name to a path within the current RAM repo."""
     if _CURRENT_REPO_ROOT:
@@ -57,9 +70,14 @@ def _resolve_package(package_name: str) -> str:
             except Exception:
                 pass  # Ignore parsing errors
 
+    # 5. Try ament_index_python (ROS 2)
+    ros_path = _get_ros_package_share_directory(package_name)
+    if ros_path:
+        return ros_path
+
     # Fallback: ignore or raise?
     raise ValueError(
-        f"Package '{package_name}' not found in RAM repo {_CURRENT_REPO_ROOT}"
+        f"Package '{package_name}' not found in RAM repo {_CURRENT_REPO_ROOT} or ROS 2 environment."
     )
 
 
@@ -364,14 +382,7 @@ def from_string(
 
         # 2. Try ament_index_python
         if pkg_path is None:
-            try:
-                from ament_index_python.get_package_share_directory import (
-                    get_package_share_directory,
-                )
-
-                pkg_path = get_package_share_directory(pkg_name)
-            except (ImportError, Exception):
-                pass
+            pkg_path = _get_ros_package_share_directory(pkg_name)
 
         if pkg_path:
             abs_path = str((Path(pkg_path) / sub_path).absolute())

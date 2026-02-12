@@ -1,8 +1,5 @@
 import hashlib
 from teleop_xr import ram
-import sys
-from unittest.mock import MagicMock
-import types
 
 
 def test_from_string_basic(tmp_path):
@@ -75,18 +72,12 @@ def test_from_string_package_uri(tmp_path, monkeypatch):
     </link>
 </robot>"""
 
-    # Correctly mock ament_index_python.packages.get_package_share_directory
-    mock_packages = types.ModuleType("ament_index_python.packages")
-
     def get_pkg_share(pkg):
         if pkg == "my_pkg":
             return str(pkg_path)
-        raise Exception("Package not found")
+        return None
 
-    mock_packages.get_package_share_directory = get_pkg_share
-
-    monkeypatch.setitem(sys.modules, "ament_index_python", MagicMock())
-    monkeypatch.setitem(sys.modules, "ament_index_python.packages", mock_packages)
+    monkeypatch.setattr(ram, "_get_ros_package_share_directory", get_pkg_share)
 
     cache_dir = tmp_path / "cache"
     urdf_path, mesh_path = ram.from_string(urdf_content, cache_dir=cache_dir)
