@@ -1,8 +1,9 @@
 {
-	"active_plan": "/home/cc/codes/teleop_xr/.sisyphus/plans/interactive-sphere-generation.md",
-	"started_at": "2026-02-06T09:40:00.000Z",
-	"completed_at": "2026-02-06T10:05:00.000Z",
-	"session_ids": ["ses_3ce4a0818ffeCGCackmyuyMwQs"],
-	"plan_name": "interactive-sphere-generation",
+	"active_plan": "/home/cc/codes/teleop_xr-worktrees/feat-windows-path/.sisyphus/plans/windows-path-handling.md",
+	"started_at": "2026-02-12T17:45:40.889Z",
+	"completed_at": "2026-02-12T17:52:00.000Z",
+	"session_ids": ["ses_3ad275ff1fferIQ86WUq8Eio7i"],
+	"plan_name": "windows-path-handling",
+	"agent": "atlas",
 	"status": "completed"
 }
