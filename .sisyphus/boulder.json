@@ -1,8 +1,7 @@
 {
-	"active_plan": "/home/cc/codes/teleop_xr-worktrees/feat-urdf_override/.sisyphus/plans/ros2-param-urdf-refactor.md",
-	"started_at": "2026-02-12T06:20:47.343Z",
-	"completed_at": "2026-02-12T07:55:00.000Z",
-	"session_ids": ["ses_3af965c9affejG0F6k3GbAKpD0"],
-	"plan_name": "ros2-param-urdf-refactor",
+	"active_plan": "/home/cc/codes/teleop_xr-worktrees/feat-urdf_override/.sisyphus/plans/ros2-viz-update.md",
+	"started_at": "2026-02-12T08:00:00.000Z",
+	"session_ids": ["ses_3acbbef92ffeJ0vh4CchP7kikv"],
+	"plan_name": "ros2-viz-update",
 	"status": "completed"
 }

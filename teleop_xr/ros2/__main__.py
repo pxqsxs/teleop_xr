@@ -2,6 +2,7 @@ import threading
 import json
 import time
 import sys
+import asyncio
 from typing import Any, Dict, Optional
 from dataclasses import asdict
 import cv2
@@ -344,6 +345,7 @@ class IKWorker(threading.Thread):
         publisher: "rclpy.publisher.Publisher",
         state_container: dict,
         node: "rclpy.node.Node",
+        teleop: Optional[Teleop] = None,
     ):
         super().__init__(daemon=True)
         self.controller = controller
@@ -351,9 +353,14 @@ class IKWorker(threading.Thread):
         self.publisher = publisher
         self.state_container = state_container
         self.node = node
+        self.teleop = teleop
+        self.teleop_loop = None
         self.latest_xr_state: Optional[XRState] = None
         self.new_state_event = threading.Event()
         self.running = True
+
+    def set_teleop_loop(self, loop):
+        self.teleop_loop = loop
 
     def update_state(self, state: XRState):
         """Thread-safe update of the latest state."""
@@ -403,6 +410,19 @@ class IKWorker(threading.Thread):
                     msg.points = [point]
 
                     self.publisher.publish(msg)
+
+                    # Publish back to WebXR for visualization
+                    if self.teleop and self.teleop_loop:
+                        joint_dict = dict(
+                            zip(
+                                self.robot.actuated_joint_names,
+                                [float(val) for val in new_config],
+                            )
+                        )
+                        asyncio.run_coroutine_threadsafe(
+                            self.teleop.publish_joint_state(joint_dict),
+                            self.teleop_loop,
+                        )
 
             except Exception as e:
                 self.node.get_logger().error(f"Error in IK Worker: {e}")
@@ -475,6 +495,16 @@ def main():
                         current_q[i] = msg.position[idx]
                 state_container["q"] = current_q
 
+                # If IK is not active, publish real robot joints for visualization
+                if ik_worker and ik_worker.teleop and ik_worker.teleop_loop:
+                    joint_dict = dict(
+                        zip(actuated_names, [float(val) for val in current_q])
+                    )
+                    asyncio.run_coroutine_threadsafe(
+                        ik_worker.teleop.publish_joint_state(joint_dict),
+                        ik_worker.teleop_loop,
+                    )
+
         node.create_subscription(JointState, "/joint_states", joint_state_callback, 10)
         ik_worker = IKWorker(controller, robot, ik_pub, state_container, node)
         ik_worker.start()
@@ -516,6 +546,11 @@ def main():
         settings=settings,
         video_sources=video_sources,
     )
+
+    if ik_worker:
+        ik_worker.teleop = teleop
+        ik_worker.set_teleop_loop(asyncio.get_event_loop())
+
     broadcaster = TransformBroadcaster(node)
 
     publishers = {}
@@ -619,6 +654,14 @@ def main():
 
     def teleop_xr_state_callback(_pose, xr_state):
         try:
+            # Capture the current event loop for ik_worker if not already set
+            if ik_worker and ik_worker.teleop_loop is None:
+                try:
+                    loop = asyncio.get_running_loop()
+                    ik_worker.set_teleop_loop(loop)
+                except RuntimeError:
+                    pass
+
             # Process events
             event_processor.process(_pose, xr_state)
 
