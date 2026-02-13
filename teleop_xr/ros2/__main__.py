@@ -12,7 +12,7 @@ import jax
 from loguru import logger
 from teleop_xr import Teleop
 from teleop_xr.video_stream import ExternalVideoSource
-from teleop_xr.config import TeleopSettings, InputMode
+from teleop_xr.config import TeleopSettings
 from teleop_xr.common_cli import CommonCLI
 from teleop_xr.messages import XRState
 from teleop_xr.events import EventProcessor, EventSettings, ButtonEvent, XRButton
@@ -265,81 +265,27 @@ class Ros2CLI(CommonCLI):
     no_urdf_topic: bool = False
     """Disable fetching URDF from topic."""
 
+    # output
+    output_topic: str = "/joint_trajectory"
+    """ROS2 topic to publish JointTrajectory messages to."""
+
     # ROS args (passed as remainder, but Tyro can capture list if explicit)
     # We will use this to pass args to rclpy
     ros_args: List[str] = field(default_factory=list)
+
+    @property
+    def robot_args_dict(self) -> Dict[str, Any]:
+        try:
+            return json.loads(self.robot_args)
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse robot_args: {self.robot_args}")
+            return {}
 
 
 class TeleopNode(Node):
     def __init__(self, cli: Ros2CLI):
         super().__init__("teleop")
         self.cli = cli
-
-    @property
-    def mode(self) -> str:
-        return self.cli.mode
-
-    @property
-    def host(self) -> str:
-        return self.cli.host
-
-    @property
-    def port(self) -> int:
-        return self.cli.port
-
-    @property
-    def input_mode(self) -> InputMode:
-        return self.cli.input_mode
-
-    @property
-    def head_topic(self) -> str:
-        return self.cli.head_topic or ""
-
-    @property
-    def wrist_left_topic(self) -> str:
-        return self.cli.wrist_left_topic or ""
-
-    @property
-    def wrist_right_topic(self) -> str:
-        return self.cli.wrist_right_topic or ""
-
-    @property
-    def extra_streams(self) -> Dict[str, str]:
-        return self.cli.extra_streams
-
-    @property
-    def frame_id(self) -> str:
-        return self.cli.frame_id
-
-    @property
-    def publish_hand_tf(self) -> bool:
-        return self.cli.publish_hand_tf
-
-    @property
-    def robot_class(self) -> str:
-        return self.cli.robot_class or ""
-
-    @property
-    def robot_args(self) -> Dict[str, Any]:
-        try:
-            return json.loads(self.cli.robot_args)
-        except json.JSONDecodeError:
-            self.get_logger().error(
-                f"Failed to parse robot_args: {self.cli.robot_args}"
-            )
-            return {}
-
-    @property
-    def urdf_topic(self) -> str:
-        return self.cli.urdf_topic
-
-    @property
-    def urdf_timeout(self) -> float:
-        return self.cli.urdf_timeout
-
-    @property
-    def no_urdf_topic(self) -> bool:
-        return self.cli.no_urdf_topic
 
 
 class IKWorker(threading.Thread):
@@ -469,13 +415,15 @@ def main():
         "xr_state": None,
     }
 
-    if node.mode == "ik":
-        robot_cls = load_robot_class(node.robot_class)
-        robot_args = node.robot_args
+    if node.cli.mode == "ik":
+        robot_cls = load_robot_class(node.cli.robot_class or None)
+        robot_args = node.cli.robot_args_dict
 
         urdf_string = None
-        if not node.no_urdf_topic:
-            urdf_string = get_urdf_from_topic(node, node.urdf_topic, node.urdf_timeout)
+        if not node.cli.no_urdf_topic:
+            urdf_string = get_urdf_from_topic(
+                node, node.cli.urdf_topic, node.cli.urdf_timeout
+            )
 
         if urdf_string:
             robot_args["urdf_string"] = urdf_string
@@ -489,7 +437,7 @@ def main():
         state_container["q"] = np.array(robot.get_default_config())
 
         # ROS2 Pub/Sub for IK
-        ik_pub = node.create_publisher(JointTrajectory, "/joint_trajectory", 10)
+        ik_pub = node.create_publisher(JointTrajectory, node.cli.output_topic, 10)
 
         def joint_state_callback(msg: JointState):
             current_q = state_container["q"].copy()
@@ -517,13 +465,13 @@ def main():
 
     # Merge topics
     topics = {}
-    if node.head_topic:
-        topics["head"] = node.head_topic
-    if node.wrist_left_topic:
-        topics["wrist_left"] = node.wrist_left_topic
-    if node.wrist_right_topic:
-        topics["wrist_right"] = node.wrist_right_topic
-    topics.update(node.extra_streams)
+    if node.cli.head_topic:
+        topics["head"] = node.cli.head_topic
+    if node.cli.wrist_left_topic:
+        topics["wrist_left"] = node.cli.wrist_left_topic
+    if node.cli.wrist_right_topic:
+        topics["wrist_right"] = node.cli.wrist_right_topic
+    topics.update(node.cli.extra_streams)
 
     video_sources = {}
     for key, topic in topics.items():
@@ -535,13 +483,13 @@ def main():
     camera_views = {k: {"device": topic} for k, topic in topics.items()}
 
     robot_vis = None
-    if node.mode == "ik" and robot:
+    if node.cli.mode == "ik" and robot:
         robot_vis = robot.get_vis_config()
 
     settings = TeleopSettings(
-        host=node.host,
-        port=node.port,
-        input_mode=node.input_mode,
+        host=node.cli.host,
+        port=node.cli.port,
+        input_mode=node.cli.input_mode,
         camera_views=camera_views,
         robot_vis=robot_vis,
     )
@@ -571,13 +519,13 @@ def main():
             return
         msg = PoseStamped()
         msg.header.stamp = stamp
-        msg.header.frame_id = node.frame_id
+        msg.header.frame_id = node.cli.frame_id
         msg.pose = matrix_to_pose_msg(mat)
         get_publisher(PoseStamped, topic).publish(msg)
 
         tf = TransformStamped()
         tf.header.stamp = tf_stamp  # Use PC timestamp for TF
-        tf.header.frame_id = node.frame_id
+        tf.header.frame_id = node.cli.frame_id
         tf.child_frame_id = child_frame_id
         tf.transform.translation.x = msg.pose.position.x
         tf.transform.translation.y = msg.pose.position.y
@@ -589,7 +537,7 @@ def main():
         buttons, axes = joy_data
         msg = Joy()
         msg.header.stamp = stamp
-        msg.header.frame_id = node.frame_id
+        msg.header.frame_id = node.cli.frame_id
         msg.buttons = buttons
         msg.axes = axes
         get_publisher(Joy, topic).publish(msg)
@@ -602,7 +550,7 @@ def main():
 
         pose_array = PoseArray()
         pose_array.header.stamp = stamp
-        pose_array.header.frame_id = node.frame_id
+        pose_array.header.frame_id = node.cli.frame_id
 
         for joint_name in XR_HAND_JOINTS:
             joint_pose_dict = joints_dict.get(joint_name)
@@ -612,10 +560,10 @@ def main():
             pose_msg = matrix_to_pose_msg(mat)
             pose_array.poses.append(pose_msg)
 
-            if node.publish_hand_tf:
+            if node.cli.publish_hand_tf:
                 tf = TransformStamped()
                 tf.header.stamp = stamp
-                tf.header.frame_id = node.frame_id
+                tf.header.frame_id = node.cli.frame_id
                 tf.child_frame_id = f"xr/hand_{handed}/{joint_name}"
                 tf.transform.translation.x = pose_msg.position.x
                 tf.transform.translation.y = pose_msg.position.y
@@ -636,7 +584,7 @@ def main():
                 event.type == ButtonEventType.DOUBLE_PRESS
                 and event.button == XRButton.SQUEEZE
             ):
-                if node.mode == "ik" and robot and ik_worker and controller:
+                if node.cli.mode == "ik" and robot and ik_worker and controller:
                     default_q = np.array(robot.get_default_config())
                     state_container["q"] = default_q
                     controller.reset()

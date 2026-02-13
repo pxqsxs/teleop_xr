@@ -51,21 +51,21 @@ def test_teleop_node_params():
     cli = Ros2CLI()
     node = TeleopNode(cli)
 
-    assert node.mode == "teleop"
-    assert node.host == "0.0.0.0"
-    assert node.port == 4443
-    assert node.input_mode == InputMode.CONTROLLER
-    assert node.head_topic == ""
-    assert node.wrist_left_topic == ""
-    assert node.wrist_right_topic == ""
-    assert node.extra_streams == {}
-    assert node.frame_id == "xr_local"
-    assert node.publish_hand_tf is False
-    assert node.robot_class == ""
-    assert node.robot_args == {}
-    assert node.urdf_topic == "/robot_description"
-    assert node.urdf_timeout == 5.0
-    assert node.no_urdf_topic is False
+    assert node.cli.mode == "teleop"
+    assert node.cli.host == "0.0.0.0"
+    assert node.cli.port == 4443
+    assert node.cli.input_mode == InputMode.CONTROLLER
+    assert node.cli.head_topic is None
+    assert node.cli.wrist_left_topic is None
+    assert node.cli.wrist_right_topic is None
+    assert node.cli.extra_streams == {}
+    assert node.cli.frame_id == "xr_local"
+    assert node.cli.publish_hand_tf is False
+    assert node.cli.robot_class is None
+    assert node.cli.robot_args_dict == {}
+    assert node.cli.urdf_topic == "/robot_description"
+    assert node.cli.urdf_timeout == 5.0
+    assert node.cli.no_urdf_topic is False
 
     node.destroy_node()
 
@@ -73,7 +73,7 @@ def test_teleop_node_params():
 def test_teleop_node_param_override():
     cli = Ros2CLI(mode="ik")
     node = TeleopNode(cli)
-    assert node.mode == "ik"
+    assert node.cli.mode == "ik"
     node.destroy_node()
 
 
@@ -84,10 +84,10 @@ def test_teleop_node_json_params():
     )
     node = TeleopNode(cli)
 
-    assert node.extra_streams == {"cam1": "/topic1"}
-    assert node.robot_args == {"arg1": 123}
+    assert node.cli.extra_streams == {"cam1": "/topic1"}
+    assert node.cli.robot_args_dict == {"arg1": 123}
 
     cli.robot_args = "{invalid}"
-    assert node.robot_args == {}
+    assert node.cli.robot_args_dict == {}
 
     node.destroy_node()
