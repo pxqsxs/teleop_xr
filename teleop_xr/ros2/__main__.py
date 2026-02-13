@@ -1,14 +1,17 @@
+from __future__ import annotations
+
+import os
 import threading
 import json
 import time
 import sys
 import asyncio
-from typing import Any, Optional
+import types
+from typing import Any, Optional, TYPE_CHECKING
 from dataclasses import asdict
 import cv2
 import numpy as np
 import tyro
-import jax
 from loguru import logger
 from teleop_xr import Teleop
 from teleop_xr.video_stream import ExternalVideoSource
@@ -16,11 +19,47 @@ from teleop_xr.config import TeleopSettings
 from teleop_xr.ros2.cli import Ros2CLI
 from teleop_xr.messages import XRState
 from teleop_xr.events import EventProcessor, EventSettings, ButtonEvent
-from teleop_xr.ik.robot import BaseRobot
-from teleop_xr.ik.loader import load_robot_class, list_available_robots
-from teleop_xr.ik.solver import PyrokiSolver
-from teleop_xr.ik.controller import IKController
+from teleop_xr.ik_utils import (
+    ensure_ik_dependencies,
+    list_available_robots as _default_list_available_robots,
+)
 import transforms3d as t3d
+
+if TYPE_CHECKING:
+    from teleop_xr.ik.robot import BaseRobot
+    from teleop_xr.ik.controller import IKController
+
+
+def list_available_robots() -> dict[str, str]:
+    """Return the robots entry points exposed by the IK module."""
+    return _default_list_available_robots()
+
+
+def list_robots_or_exit() -> None:
+    try:
+        robots = list_available_robots()
+        logger.info("Available robots (via entry points):")
+        if not robots:
+            logger.info("  None")
+        for name, path in robots.items():
+            logger.info(f"  {name}: {path}")
+    except ImportError:
+        logger.error(
+            "IK dependencies not installed. Install with: pip install 'teleop-xr[ik]'"
+        )
+        sys.exit(1)
+    return
+
+
+def load_robot_class(robot_spec: str | None = None) -> type[BaseRobot]:
+    from teleop_xr.ik.loader import load_robot_class as _load_robot_class
+
+    return _load_robot_class(robot_spec)
+
+
+ROS_AVAILABLE = False
+ROS_IMPORT_ERROR: ImportError | None = None
+ALLOW_MISSING_ROS = os.environ.get("TELEOP_XR_ALLOW_NO_ROS") == "1"
 
 try:
     import rclpy
@@ -38,8 +77,77 @@ try:
         HAS_CV_BRIDGE = True
     except ImportError:
         HAS_CV_BRIDGE = False
-except ImportError:
-    raise ImportError(
+except ImportError as exc:
+    ROS_AVAILABLE = False
+    ROS_IMPORT_ERROR = ImportError(
+        "ROS2 is not sourced. Please source ROS2 before running this script."
+    )
+    ROS_IMPORT_ERROR.__cause__ = exc
+    rclpy = types.ModuleType("rclpy")
+
+    def _noop(*args, **kwargs):
+        pass
+
+    setattr(rclpy, "init", _noop)
+    setattr(rclpy, "shutdown", _noop)
+    setattr(rclpy, "spin", _noop)
+    setattr(rclpy, "spin_once", _noop)
+    setattr(rclpy, "ok", lambda: False)
+    qos_ns = types.SimpleNamespace(
+        QoSProfile=lambda *args, **kwargs: None,
+        DurabilityPolicy=types.SimpleNamespace(TRANSIENT_LOCAL=0),
+    )
+    setattr(rclpy, "qos", qos_ns)
+    node_module = types.ModuleType("rclpy.node")
+    setattr(
+        node_module,
+        "Node",
+        type(
+            "FakeNode",
+            (),
+            {
+                "get_logger": lambda self: types.SimpleNamespace(
+                    info=_noop, error=_noop, warn=_noop
+                )
+            },
+        ),
+    )
+    setattr(rclpy, "node", node_module)
+    sys.modules["rclpy"] = rclpy
+    sys.modules["rclpy.node"] = node_module
+    Node = Pose = PoseStamped = PoseArray = TransformStamped = Joy = Image = (
+        CompressedImage
+    ) = JointState = type("_Dummy", (), {"__init__": lambda self, **kwargs: None})
+    JointTrajectory = JointTrajectoryPoint = type(
+        "_DummyTraj", (), {"__init__": lambda self, **kwargs: None}
+    )
+    Float64 = String = type(
+        "_DummyField", (), {"__init__": lambda self, **kwargs: None}
+    )
+    TransformBroadcaster = type(
+        "_DummyBroadcaster", (), {"__init__": lambda self, **kwargs: None}
+    )
+    Time = Duration = type(
+        "_DummyTime",
+        (),
+        {
+            "__init__": lambda self, **kwargs: setattr(
+                self, "sec", kwargs.get("sec", 0)
+            )
+            or setattr(self, "nanosec", kwargs.get("nanosec", 0))
+        },
+    )
+    HAS_CV_BRIDGE = False
+    CvBridge = None
+else:
+    ROS_AVAILABLE = True
+    ROS_IMPORT_ERROR = None
+
+
+def ensure_ros_available() -> None:
+    if ROS_AVAILABLE or ALLOW_MISSING_ROS:
+        return
+    raise ROS_IMPORT_ERROR or ImportError(
         "ROS2 is not sourced. Please source ROS2 before running this script."
     )
 
@@ -136,6 +244,7 @@ def ms_to_time(ms):
 
 
 def get_urdf_from_topic(node, topic, timeout):
+    ensure_ros_available()
     node.get_logger().info(f"Fetching URDF from topic {topic} (timeout={timeout}s)...")
     urdf_str = None
     event = threading.Event()
@@ -326,19 +435,18 @@ class IKWorker(threading.Thread):
 
 
 def main():
-    jax.config.update("jax_platform_name", "cpu")
     cli = tyro.cli(Ros2CLI)
 
+    # Configure JAX only if in IK mode
+    if cli.mode == "ik":
+        ensure_ik_dependencies()
+
     if cli.list_robots:
-        robots = list_available_robots()
-        logger.info("Available robots (via entry points):")
-        if not robots:
-            logger.info("  None")
-        for name, path in robots.items():
-            logger.info(f"  {name}: {path}")
+        list_robots_or_exit()
         return
 
     # 1. Initialize ROS2
+    ensure_ros_available()
     rclpy.init(args=["--ros-args"] + cli.ros_args)
     node = TeleopNode(cli)
 
@@ -369,6 +477,16 @@ def main():
     }
 
     if node.cli.mode == "ik":
+        # Import IK modules only when needed
+        try:
+            from teleop_xr.ik.solver import PyrokiSolver
+            from teleop_xr.ik.controller import IKController
+        except ImportError as e:
+            node.get_logger().error(
+                f"IK dependencies not installed: {e}. Install with: pip install 'teleop-xr[ik]'"
+            )
+            sys.exit(1)
+
         robot_cls = load_robot_class(node.cli.robot_class or None)
         robot_args = node.cli.robot_args_dict
 
